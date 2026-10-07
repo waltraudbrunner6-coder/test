@@ -6,7 +6,9 @@ Eigenständiges Swift Package `PoliticalFactCheckCore`, Swift-Tools-Version 5.9,
 
 90 XCTest-Testmethoden (73 bestehende unverändert, 17 zusätzliche Review-Tests) verwenden ausschließlich synthetische Akteure, Quellen und Versprechen. Die Methodik-Fixture ist ausdrücklich `TEST-FIXTURE-ONLY`; eine redaktionelle MethodologyVersion 1.0 wurde nicht erstellt. Getestet werden sollen auch der vollständige Fallgraph, Parteienneutralität, historische Referenzen sowie Veröffentlichung 2025 / Ereignis 2021 / Stichtag 2022.
 
-In dieser Umgebung sind weder `swift` noch `swiftc` verfügbar. Der Aufruf `swift test` endet mit `swift: command not found` (Exit 127). **Kein Test wurde ausgeführt, keine Kompilierung bestätigt.** Eine statische Durchsicht einschließlich Klammern, Modell-Initialisierer, Argumentreihenfolge und Referenztypen ersetzt diese Prüfung nicht. Vor der Freigabe ist `swift test` mit einer Swift-Toolchain ab 5.9 erforderlich. Dafür wurde `.github/workflows/swift-tests.yml` ergänzt: Push und Pull Request, macOS-15-Runner, Checkout, `swift --version`, `swift test`. Die GitHub-CLI 2.46.0 ist vorhanden, meldet für die vorhandene Authentifizierung jedoch einen Fehler; ein Lesezugriff auf die Actions-API liefert `Forbidden`. Swift-Version und CI-Ergebnis sind deshalb bislang nicht verifiziert.
+Der Ausgangsstand `b114ee40015e28c17e26cd1555ba555f63100e6b` ist laut ausdrücklich bestätigtem Nutzerbericht erfolgreich auf macOS-15 mit Apple Swift 6.1.2 kompiliert und getestet: 90 Tests, 0 Fehler, GitHub-Actions-Lauf „Validate domain core and clarify review workflow“. Damit ist dieser Domain-Core als `DOMAIN CORE READY` bestätigt.
+
+Lokal bleiben `swift` und `swiftc` nicht verfügbar (`command not found`, Exit 127). Die neue Phase 2.2 ergänzt ein separates SwiftData-Target und 40 weitere Tests; diese benötigen einen eigenen macOS-CI-Nachweis. Die bestehende `.github/workflows/swift-tests.yml` führt beide Targets aus. Die lokale GitHub-CLI meldet weiterhin fehlerhafte Authentifizierung; daraus wird kein erfolgreiches neues CI-Ergebnis abgeleitet. Einzelheiten zu Persistenzabbildung, atomaren Operationen und verbleibenden Grenzen stehen in [persistence-notes.md](persistence-notes.md).
 
 ## Swift-Repräsentation und konservative Präzisierungen
 
@@ -30,11 +32,11 @@ Die Nummern beziehen sich auf die Anforderungen dieses Implementierungsschritts.
 | 1, 4, 14, 15 | Verifiziertes Zitat und Tatsachensatz benötigen geprüfte Fundstellen; Zitat muss in einer zitierten Fundstelle wortgleich vorliegen; Handlung allein genügt nicht | Authentizität, richtige Auswahl und Kontext bleiben menschlich. |
 | 6, 13 | Freigabe benötigt eine auflösbare menschliche ReviewerIdentity und Prüfzeit | Tatsächliche Identität oder eine vorgetäuschte Prüfung ist ohne Benutzerkonten nicht nachweisbar. |
 | 7, 8, 9 | Leere Evidenz und bloße Kontextlinks tragen kein negatives Urteil; widersprechender Link für contraryAction; strukturierter Grund und nichtleere Begründung für notVerifiable | Aussagekraft, Vollständigkeit der Gegenbelege und Angemessenheit der Gründe bleiben fachlich. Niedrige Evidenzsicherheit sperrt abschließendes notFulfilled / contraryAction. |
-| 10, 11 | Neue Revisions-ID, unveränderliche historische Werte, Replacement-Prüfung und abhängige Review-Markierung | Aufrufer müssen Änderungen und Review-Markierungen gemeinsam anwenden; Persistenz und Audit-Schreibvorgänge fehlen bewusst. |
+| 10, 11 | Neue Revisions-ID, unveränderliche historische Werte, Replacement-Prüfung und abhängige Review-Markierung | Der Core liefert reine Ergebnisse; Phase 2.2 ergänzt transaktionale Speicherung und Audit-Schreibvorgänge im separaten Persistenzmodul. |
 | 12 | Datumsrollen getrennt; Stichtag gegen Ereignis/Gültigkeit; zukünftiges Ereignis abgewiesen, spätere Veröffentlichung zulässig | Unscharfe Zeiträume und das tatsächliche Ereignisdatum brauchen menschliche Klärung. |
 | 16, 17 | Bestätigte aktive Kriterien für readyForEvaluation; nur spezifizierte, benachbarte Workflowübergänge | Ob Messlatte, Materialitätsregel und Tatsachen ausreichend sind, entscheidet ein Mensch. |
 
-Keine Lösch-, Speicher-, Import- oder Audit-Automatik ist enthalten. AuditEntry ist ein fachlicher Datenwert. Die technischen Beziehungen und historischen Inhalte können im Speicher validiert werden; Serialisierung und Wiederladen sind Gegenstand der späteren Persistenzphase.
+Der Core enthält keine Lösch-, Speicher-, Import- oder Audit-Automatik. AuditEntry ist ein fachlicher Datenwert. Phase 2.2 ergänzt Serialisierung und Wiederladen außerhalb des unveränderten Core.
 
 ## Verbindlich gelöste Review-Semantik
 
@@ -44,7 +46,7 @@ CaseWorkflowState beschreibt monoton erreichte Reife. Der Case-Validator akzepti
 
 ## Offene Implementierungsfragen
 
-1. Freigaben müssen später gemeinsam mit AuditEntry und Review-Markierungen gespeichert werden. Der Core liefert reine Ergebnisse; eine transaktionale Anwendungsoperation und das Lösch-/Archivierungsverhalten sind hier nicht implementiert.
+1. Phase 2.2 definiert atomare Persistenzoperationen für neue Evidenz und Kriterienrevisionen inklusive Review-Markierungen und Audits. Ein produktiver Freigabeworkflow sowie vollständige Archivierung und Datenschutzlöschung bleiben spätere Aufgaben.
 2. Vollständige Inhaltsverifikation, Kriterienmaterialität, politische Zurechnung, tatsächliche menschliche Prüfung und Gesamtkategorie bleiben redaktionelle Entscheidungen. Eine produktive MethodologyVersion muss vor der ersten produktiven Freigabe verbindlich festgelegt werden.
 
-Die drei verbindlichen Spezifikationsdokumente wurden ausschließlich für die vorgegebene Workflow-/Review-Semantik und deren Ersatzbeziehungen präzisiert. SwiftData, SwiftUI, AppKit, Netzwerk, Recherche, KI-API, Dateiimport, Export, Video und Voiceover wurden nicht implementiert.
+Die drei verbindlichen Spezifikationsdokumente wurden ausschließlich für die vorgegebene Workflow-/Review-Semantik und deren Ersatzbeziehungen präzisiert. Der Domain-Core hängt weiterhin nicht von SwiftData ab; SwiftData liegt ausschließlich im neuen Persistenzmodul. SwiftUI, AppKit, Netzwerk, Recherche, KI-API, Dateiimport, Export, Video und Voiceover wurden nicht implementiert.
