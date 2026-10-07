@@ -132,6 +132,7 @@ public enum DomainChanges {
         }
         switch evaluation.status {
         case .approved:
+            try DomainValidator.review(evaluation.approval, in: context).requireValid()
             try TransitionRules.validate(evaluation.status, to: .reviewRequired)
             return evaluation.replacingLifecycle(status: .reviewRequired, approval: evaluation.approval, reviewReason: request.reason)
         case .draft:

@@ -43,7 +43,7 @@ Eine 2025 publizierte SourceVersion kann ein Ereignis von 2021 belegen: Für Zul
 Keine einzelne Statusvariable soll Datenherkunft, Faktentreue, Workflow und Freigabe vermengen. Das Modell verwendet:
 
 1. **FactVerificationState** pro behauptungsrelevantem Revision-/Fundstelleninhalt: `unreviewed`, `verified`, `rejected`, `superseded`. Herkunft (`humanEntered`, `aiExtracted`, `imported`) bleibt separater Wert. KI-Extraktion bleibt `unreviewed`, bis ein Mensch prüft.
-2. **CaseWorkflowState** für den Gesamtfortschritt: `candidate`, `documented`, `verified`, `readyForEvaluation`, `evaluated`, `approved`. Bedeutung und Übergänge siehe Abschnitt 8. `approved` bedeutet freigegebene CaseEvaluation, nicht dass alle politischen Daten absolut sicher sind.
+2. **CaseWorkflowState** für den Gesamtfortschritt: `candidate`, `documented`, `verified`, `readyForEvaluation`, `evaluated`, `approved`. Bedeutung und Übergänge siehe Abschnitt 8. `CaseWorkflowState` beschreibt monoton erreichte Workflow-Reife. `approved` bedeutet, dass mindestens eine historisch menschlich freigegebene CaseEvaluation existiert; es behauptet weder absolute Faktensicherheit noch aktuelle Reviewfreiheit. Aktueller Reviewbedarf wird separat aus EvaluationStatus und den verwendeten Revisionen abgeleitet, nicht als zweiter Workflowstatus gespeichert.
 3. **CriterionRevisionState** (`draft`, `confirmed`, `superseded`) für den Freeze der Prüfmesslatte; getrennt von FactVerificationState. Eine bestätigte Revision wird nie editiert.
 4. **EvaluationStatus** für einen konkreten Snapshot: `draft`, `needsReview`, `approved`, `reviewRequired`, `superseded`.
 5. **ExcerptVerificationState** für eine genaue SourceExcerpt-Fundstelle: `unverified`, `verified`, `rejected`, `superseded`.
@@ -71,7 +71,7 @@ Feldtypen sind konzeptionell: `ID`, Text, Datumstyp aus 1.2, Enum, Zahl, URL, lo
 - **Identität/Versionierung:** veränderliche Identität/Arbeitskopf. Keine Inhaltsrevision durch Kopie des kompletten Case bei jeder Änderung; fachlich relevante Auswertungsgrundlage wird als unveränderliches CaseRevision-Manifest eingefroren.
 - **Beziehungen:** genau ein Promise; null oder mehr EvaluationCriteria; null oder mehr ActionOrDevelopment; Source-Datensätze über Referenzen; null oder mehr ResearchTasks, AuditEntries und CaseRevisions; null oder mehr CaseEvaluations.
 - **Löschen:** Case-Löschung darf nicht still Historie oder externe Originale beseitigen. Lokales Löschen verlangt Bestätigung und erhält entsprechend Datenschutz-/Aufbewahrungsentscheidung einen Export/Backup; externe Dateien werden nur gelöscht, wenn sie von der App verwaltet werden.
-- **Invarianten:** `approved` setzt eine freigegebene CaseEvaluation voraus. Ein Kandidat darf unvollständig sein. IDs/Referenzen bleiben stabil.
+- **Invarianten:** `approved` setzt mindestens eine historisch menschlich freigegebene CaseEvaluation mit erhaltenem Reviewer und Freigabezeitpunkt voraus, auch wenn deren operativer Status inzwischen `reviewRequired` oder `superseded` ist. Workflow-Reife springt nicht zurück; neue Arbeitsrevisionen dürfen die historischen Meilensteine nicht entwerten. Ein Kandidat darf unvollständig sein. IDs/Referenzen bleiben stabil.
 
 ### 2.3 Actor
 
@@ -199,8 +199,8 @@ Feldtypen sind konzeptionell: `ID`, Text, Datumstyp aus 1.2, Enum, Zahl, URL, lo
 **CaseEvaluation**
 
 - **Zweck:** Unveränderlicher Gesamtbefund für eine eingefrorene Fallrevision und einen Bewertungsstichtag.
-- **Felder:** ID, CaseID, CaseRevisionID, Bewertungsstichtag als DatedValue, MethodologyVersionID, Gesamtkategorie, Gesamtevidenzsicherheit, Begründung, Tatsachen/Interpretation/Unsicherheit getrennt oder als sauber typisierte Abschnitte, erstellt von/Datum, freigegeben von ReviewerIdentity/Zeit, Reviewgrund und EvaluationStatus.
-- **Versionierung:** Entscheidungsinhalt und Freigabedaten sind nach Freigabe unveränderlicher historischer Snapshot. Neue Evidenz erzeugt eine neue CaseRevision und Evaluation; alte Evaluation wird nicht überschrieben. Ihr operativer Reviewstatus kann per AuditEntry `reviewRequired` oder nach Ersatz `superseded` werden, ohne damalige Kategorie/Begründung zu ändern.
+- **Felder:** ID, CaseID, CaseRevisionID, Bewertungsstichtag als DatedValue, MethodologyVersionID, Gesamtkategorie, Gesamtevidenzsicherheit, Begründung, Tatsachen/Interpretation/Unsicherheit getrennt oder als sauber typisierte Abschnitte, erstellt von/Datum, freigegeben von ReviewerIdentity/Zeit, Reviewgrund und EvaluationStatus; optionale `replacesEvaluationID` auf die ausdrücklich ersetzte historische CaseEvaluation desselben Cases (azyklische Ersatzkette).
+- **Versionierung:** Entscheidungsinhalt und Freigabedaten sind nach Freigabe unveränderlicher historischer Snapshot. Neue Evidenz erzeugt eine neue CaseRevision und Evaluation; alte Evaluation wird nicht überschrieben. Ihr operativer Reviewstatus kann per AuditEntry `reviewRequired` oder nach Ersatz `superseded` werden, ohne damalige Kategorie, Begründung, CaseRevisionID, CriterionEvaluations, MethodologyVersion, Reviewer oder ursprünglichen Freigabezeitpunkt zu ändern. Neue menschliche Freigabe erfolgt an einer neuen Evaluation, bei neuer Evidenz mit neuem Snapshot; die alte Evaluation wird niemals wieder zu einem umgeschriebenen Urteil freigegeben.
 - **Beziehungen:** genau ein Case und CaseRevision; eine CriterionEvaluation je verwendeter CriterionRevision; eine MethodologyVersion.
 - **Löschen:** nach Freigabe nie physisch löschen; Aufbewahrungs-/Löschbedarf als ausdrücklich protokollierte Redaktion behandeln.
 - **Invarianten:** freigegebene Bewertung benötigt menschlichen Reviewer; KI kann Autor/Helfer sein, nie ReviewerIdentity. Kategorie und Evidenzsicherheit sind unabhängige Werte. Gesamturteil muss mit den CriterionEvaluations konsistent begründet sein; automatische Regelprüfung darf menschliche Gesamtbewertung nicht ersetzen.
@@ -305,9 +305,13 @@ SwiftData-eigene Modellklassen sind später Persistenzabbildung, nicht selbst di
 - **verified:** Originalwortlaut, Kontext und Akteurzuordnung menschlich geprüft; noch keine vollständige Evidenzbewertung behauptet.
 - **readyForEvaluation:** Kriterienrevisionen menschlich bestätigt und eingefroren; Quellen/Fundstellen verifiziert; offene ResearchTasks sind sichtbar. Der Zustand behauptet nicht, dass jede Tatsachenfrage abschließend geklärt ist.
 - **evaluated:** mindestens ein CaseEvaluation-Snapshot existiert, noch nicht zwingend freigegeben.
-- **approved:** menschlich freigegebene CaseEvaluation existiert.
+- **approved:** mindestens eine historisch menschlich freigegebene CaseEvaluation mit erhaltenen Freigabemetadaten existiert. Ihre aktuelle Reviewfreiheit ist damit nicht ausgesagt.
 
-Erlaubte Korrektur-/Rücksprünge laufen stets über neue Revisionen und erzeugen AuditEntry; bestehende Evaluation erhält `reviewRequired`. Keine alte Snapshot-Bewertung wird wieder in Draft umgeschrieben. Bei nicht verifizierbarem Fall kann `readyForEvaluation` zu einer ausdrücklich begründeten Evaluation „nicht überprüfbar“ führen; eine Rechercheblockade darf dabei nicht als Nichterfüllung kodiert werden.
+Die Case-Folge ist monoton; es gibt keine Rücksprünge bei neuer Evidenz oder Kriterienrevisionen. Korrekturen erzeugen neue Revisionen und AuditEntry; die bestehende Evaluation erhält `reviewRequired`, ohne die erreichte Case-Reife zu ändern. Für `evaluated` und `approved` belegen historische Evaluation-Snapshots die erreichten Meilensteine, auch wenn die aktuellen Arbeitsköpfe bereits neuere Entwürfe enthalten. Keine alte Snapshot-Bewertung wird wieder in Draft umgeschrieben. Bei nicht verifizierbarem Fall kann `readyForEvaluation` zu einer ausdrücklich begründeten Evaluation „nicht überprüfbar“ führen; eine Rechercheblockade darf dabei nicht als Nichterfüllung kodiert werden.
+
+**Abgeleiteter CaseReviewState (kein persistiertes Feld):** `notYetApproved` bedeutet noch keine historische Freigabe; `reviewRequired` bedeutet offenen erneuten Prüfbedarf; `upToDate` bedeutet eine aktuelle menschliche Freigabe ohne unaufgelösten Reviewbedarf. Ein historisch freigegebener Case kann deshalb gleichzeitig WorkflowState `approved` und CaseReviewState `reviewRequired` besitzen.
+
+Ein offen reviewbedürftiges oder überholtes Urteil wird nur durch eine menschlich freigegebene Evaluation mit ausdrücklicher, gegebenenfalls transitiver Ersatzbeziehung aufgelöst. Eine andere Freigabe allein genügt nicht. Die aktuelle Freigabe muss im Manifest die aktuellen Promise-/Kriterien-/Handlungsrevisionen und die verfügbaren verifizierten Links zu diesen Kriterien abdecken. Ein ungeprüfter Ersatzentwurf löst keinen Review auf. Bei strukturell ungültigen Eingaben darf die Ableitung kein `upToDate` vortäuschen. Dies ist eine technische Aktualitätsprüfung, keine automatische politische Neubewertung.
 
 ### SourceExcerpt
 

@@ -11,16 +11,30 @@ extension DomainValidator {
             result.add(.relationshipMismatch(ObjectReference(kind: .politicalCase, id: politicalCase.id)))
         }
         result.merge(validate(revision, in: context))
-        if politicalCase.workflowState != .candidate && revision.quote.excerptIDs.isEmpty { result.add(.missingOriginalExcerpt) }
+        result.merge(checkReferences(politicalCase.activeCriterionRevisionIDs, kind: .criterionRevision) { context.find($0) != nil })
+        result.merge(checkReferences(politicalCase.currentActionRevisionIDs, kind: .actionRevision) { context.find($0) != nil })
+        for id in politicalCase.activeCriterionRevisionIDs {
+            if let criterion = context.find(id), context.find(criterion.criterionID)?.promiseID != promise.id {
+                result.add(.relationshipMismatch(ObjectReference(kind: .criterionRevision, id: id)))
+            }
+        }
+        for id in politicalCase.currentActionRevisionIDs {
+            if let action = context.find(id), context.find(action.actionID)?.caseID != politicalCase.id {
+                result.add(.relationshipMismatch(ObjectReference(kind: .actionRevision, id: id)))
+            }
+        }
+        if [CaseWorkflowState.documented, .verified, .readyForEvaluation].contains(politicalCase.workflowState) && revision.quote.excerptIDs.isEmpty {
+            result.add(.missingOriginalExcerpt)
+        }
         switch politicalCase.workflowState {
-        case .verified, .readyForEvaluation, .evaluated, .approved:
+        case .verified, .readyForEvaluation:
             if revision.quote.verification != .verified || revision.context.verification != .verified || revision.speaker.verification != .verified {
                 result.add(.relationshipMismatch(ObjectReference(kind: .promiseRevision, id: revision.id)))
             }
         default: break
         }
         switch politicalCase.workflowState {
-        case .readyForEvaluation, .evaluated, .approved:
+        case .readyForEvaluation:
             if politicalCase.activeCriterionRevisionIDs.isEmpty { result.add(.missingCriteria) }
             result.merge(checkReferences(politicalCase.activeCriterionRevisionIDs, kind: .criterionRevision) { context.find($0) != nil })
             for id in politicalCase.activeCriterionRevisionIDs {
@@ -32,12 +46,11 @@ extension DomainValidator {
         default: break
         }
         if politicalCase.workflowState == .evaluated || politicalCase.workflowState == .approved {
+            // Workflow records milestones. Current working heads may already have newer drafts.
             let available = context.caseEvaluations.filter { evaluation in
-                guard evaluation.caseID == politicalCase.id, let snapshot = context.find(evaluation.caseRevisionID) else { return false }
-                return snapshot.promiseRevisionID == politicalCase.currentPromiseRevisionID &&
-                    Set(snapshot.criteria.map { $0.id }) == Set(politicalCase.activeCriterionRevisionIDs)
+                evaluation.caseID == politicalCase.id && validate(evaluation, in: context).isValid
             }
-            if available.isEmpty || (politicalCase.workflowState == .approved && !available.contains(where: { $0.status == .approved })) {
+            if available.isEmpty || (politicalCase.workflowState == .approved && !available.contains(where: { $0.hasHistoricalApproval })) {
                 result.add(.relationshipMismatch(ObjectReference(kind: .politicalCase, id: politicalCase.id)))
             }
         }

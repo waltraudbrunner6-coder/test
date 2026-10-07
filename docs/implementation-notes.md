@@ -4,9 +4,9 @@
 
 Eigenständiges Swift Package `PoliticalFactCheckCore`, Swift-Tools-Version 5.9, ohne externe Dependencies und ohne Plattformbindung. `Domain/` enthält Werttypen, typisierte UUID-IDs, Datenobjekte und reine Änderungsfunktionen; `Validation/` enthält strukturierte Fehler, Warnungen, Übergangsregeln und Validatoren. Foundation dient ausschließlich grundlegenden Werten wie UUID, Datum und URL. `DomainContext` ist ein expliziter, unveränderlicher Validierungseingang mit auflösbaren Referenzen, kein Speicher oder Repository-Service.
 
-73 XCTest-Testmethoden verwenden ausschließlich synthetische Akteure, Quellen und Versprechen. Die Methodik-Fixture ist ausdrücklich `TEST-FIXTURE-ONLY`; eine redaktionelle MethodologyVersion 1.0 wurde nicht erstellt. Getestet werden sollen auch der vollständige Fallgraph, Parteienneutralität, historische Referenzen sowie Veröffentlichung 2025 / Ereignis 2021 / Stichtag 2022.
+90 XCTest-Testmethoden (73 bestehende unverändert, 17 zusätzliche Review-Tests) verwenden ausschließlich synthetische Akteure, Quellen und Versprechen. Die Methodik-Fixture ist ausdrücklich `TEST-FIXTURE-ONLY`; eine redaktionelle MethodologyVersion 1.0 wurde nicht erstellt. Getestet werden sollen auch der vollständige Fallgraph, Parteienneutralität, historische Referenzen sowie Veröffentlichung 2025 / Ereignis 2021 / Stichtag 2022.
 
-In dieser Umgebung sind weder `swift` noch `swiftc` verfügbar. Der Aufruf `swift test` endet mit `swift: command not found` (Exit 127). **Kein Test wurde ausgeführt, keine Kompilierung bestätigt.** Eine statische Durchsicht einschließlich Klammern, Modell-Initialisierer, Argumentreihenfolge und Referenztypen ersetzt diese Prüfung nicht. Vor der Freigabe ist `swift test` mit einer Swift-Toolchain ab 5.9 erforderlich.
+In dieser Umgebung sind weder `swift` noch `swiftc` verfügbar. Der Aufruf `swift test` endet mit `swift: command not found` (Exit 127). **Kein Test wurde ausgeführt, keine Kompilierung bestätigt.** Eine statische Durchsicht einschließlich Klammern, Modell-Initialisierer, Argumentreihenfolge und Referenztypen ersetzt diese Prüfung nicht. Vor der Freigabe ist `swift test` mit einer Swift-Toolchain ab 5.9 erforderlich. Dafür wurde `.github/workflows/swift-tests.yml` ergänzt: Push und Pull Request, macOS-15-Runner, Checkout, `swift --version`, `swift test`. Die GitHub-CLI 2.46.0 ist vorhanden, meldet für die vorhandene Authentifizierung jedoch einen Fehler; ein Lesezugriff auf die Actions-API liefert `Forbidden`. Swift-Version und CI-Ergebnis sind deshalb bislang nicht verifiziert.
 
 ## Swift-Repräsentation und konservative Präzisierungen
 
@@ -36,10 +36,15 @@ Die Nummern beziehen sich auf die Anforderungen dieses Implementierungsschritts.
 
 Keine Lösch-, Speicher-, Import- oder Audit-Automatik ist enthalten. AuditEntry ist ein fachlicher Datenwert. Die technischen Beziehungen und historischen Inhalte können im Speicher validiert werden; Serialisierung und Wiederladen sind Gegenstand der späteren Persistenzphase.
 
+## Verbindlich gelöste Review-Semantik
+
+CaseWorkflowState beschreibt monoton erreichte Reife. Der Case-Validator akzeptiert `approved`, wenn mindestens eine gültige historisch menschlich freigegebene Evaluation existiert, auch bei `reviewRequired` oder `superseded`. Aktuelle Arbeitsrevisionen müssen diese historische Evaluation nicht nachträglich ersetzen. Die ursprünglichen Freigabemetadaten bleiben unverändert und müssen weiter auflösbar sein.
+
+`CaseReviews.state(of:in:)` liefert rein abgeleitet `notYetApproved`, `reviewRequired` oder `upToDate`. Es validiert seine Eingaben und verlangt für das Auflösen eines historischen Reviews eine freigegebene Ersatz-Evaluation über `replacesEvaluationID` und ein Manifest der aktuellen Revisionen/verifizierten Links. Ein anderer neuer Befund oder ein Entwurf genügt nicht. Ersatzbeziehungen werden auf Zugehörigkeit, auflösbare historische Freigabe, zeitliche Reihenfolge und Zyklen geprüft. Die vorherige Workflow-Frage ist damit fachlich gelöst; es wird kein zusätzlicher Zustand gespeichert und keine historische Kategorie verändert.
+
 ## Offene Implementierungsfragen
 
-1. Die verbindliche Spezifikation erlaubt ausschließlich vorwärtsgerichtete Case-Übergänge, verlangt aber Reviewbedarf nach neuen Kriterien oder Evidenz. Ein bereits `approved` geführter Case mit ausschließlich `reviewRequired`-Evaluation erfüllt die aktuelle Freigabevoraussetzung nicht mehr. Konservativ werden weder ein Rücksprung noch eine neue Freigabe erfunden; der Zustand wird als ungültig gemeldet. Vor Persistenz/UI muss geklärt werden, wie der Case-Fortschritt während einer erneuten Prüfung dargestellt wird.
-2. Freigaben müssen später gemeinsam mit AuditEntry und Review-Markierungen gespeichert werden. Der Core liefert reine Ergebnisse; eine transaktionale Anwendungsoperation und das Lösch-/Archivierungsverhalten sind hier nicht implementiert.
-3. Vollständige Inhaltsverifikation, Kriterienmaterialität, politische Zurechnung, tatsächliche menschliche Prüfung und Gesamtkategorie bleiben redaktionelle Entscheidungen. Eine produktive MethodologyVersion muss vor der ersten produktiven Freigabe verbindlich festgelegt werden.
+1. Freigaben müssen später gemeinsam mit AuditEntry und Review-Markierungen gespeichert werden. Der Core liefert reine Ergebnisse; eine transaktionale Anwendungsoperation und das Lösch-/Archivierungsverhalten sind hier nicht implementiert.
+2. Vollständige Inhaltsverifikation, Kriterienmaterialität, politische Zurechnung, tatsächliche menschliche Prüfung und Gesamtkategorie bleiben redaktionelle Entscheidungen. Eine produktive MethodologyVersion muss vor der ersten produktiven Freigabe verbindlich festgelegt werden.
 
-Die drei verbindlichen Spezifikationsdokumente wurden nicht verändert. SwiftData, SwiftUI, AppKit, Netzwerk, Recherche, KI-API, Dateiimport, Export, Video und Voiceover wurden nicht implementiert.
+Die drei verbindlichen Spezifikationsdokumente wurden ausschließlich für die vorgegebene Workflow-/Review-Semantik und deren Ersatzbeziehungen präzisiert. SwiftData, SwiftUI, AppKit, Netzwerk, Recherche, KI-API, Dateiimport, Export, Video und Voiceover wurden nicht implementiert.

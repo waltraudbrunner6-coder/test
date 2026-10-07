@@ -59,6 +59,7 @@ Die Baumdarstellung zeigt Referenzen und ist kein Lösch-/Besitzbaum. Excerpts u
 | CaseRevision → CaseEvaluation | 1:N | Ein Snapshot kann zu mehreren Stichtagen bewertet werden; jedes Urteil bleibt separat. |
 | CaseEvaluation → CriterionEvaluation | 1:N | Pro verwendeter CriterionRevision gibt es ein Kriteriumsergebnis; die verwendeten Kriterienrevisionen sind daraus ableitbar. |
 | CriterionEvaluation → EvidenceLink | N:M | Begründung nutzt geprüfte Links des referenzierten Snapshots; Gegenbelege bleiben sichtbar. |
+| CaseEvaluation → ersetzte CaseEvaluation | N:0..1 | Ausdrückliche azyklische Ersatzkette innerhalb desselben Cases; historische Inhalte und Freigabe bleiben erhalten. |
 | CaseEvaluation → MethodologyVersion | N:1 | Bewertung benennt den exakt angewandten Regelstand. |
 | CaseEvaluation → ScriptDraft | 1:N | Skriptfassungen sind an ein konkretes Urteil gebunden. |
 | ScriptDraft → ScriptStatement → SourceExcerpt/EvidenceLink | 1:N:N | Tatsachensätze referenzieren überprüfbare Fundstellen; Interpretation wird typisiert. |
@@ -70,7 +71,7 @@ Die Baumdarstellung zeigt Referenzen und ist kein Lösch-/Besitzbaum. Excerpts u
 - CaseRevision ist ein Manifest aus IDs, kein duplizierter veränderlicher Fall. Es enthält keine Evaluation und erzeugt daher keinen Zyklus.
 - EvidenceLink verweist auf CriterionRevision und Fundstelle, optional auf ActionRevision. ActionRevision verweist nicht zurück auf EvidenceLink.
 - CriterionEvaluation gehört zu genau einer CaseEvaluation. CaseEvaluation wiederum referenziert CaseRevision, nicht umgekehrt.
-- Eine Änderung/Neurevision markiert abhängige freigegebene Evaluationen als erneut prüfbedürftig. Der historische Snapshot behält unveränderte IDs und damalige Entscheidung.
+- Eine Änderung/Neurevision markiert abhängige freigegebene Evaluationen als erneut prüfbedürftig. Der historische Snapshot behält unveränderte IDs, damalige Entscheidung und ursprüngliche menschliche Freigabe. Die monoton erreichte Case-Workflow-Reife bleibt bestehen. CaseReviewState wird aus Evaluationen, Ersatzbeziehungen und aktuellen Manifestbezügen abgeleitet, nicht gespeichert; eine neue freigegebene Ersatz-Evaluation kann den offenen Review auflösen.
 - Quelldateien sind externe, lokal verwaltete Assets; SourceVersion hält Datei-Referenz und Hash. SwiftData enthält Metadaten und Beziehungen, keine großen Binärdateien.
 - IDs der gelöschten/archivierten Akteure, Sources und Excerpts dürfen nicht still verschwinden, wenn ein Snapshot sie referenziert.
 

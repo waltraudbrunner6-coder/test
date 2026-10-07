@@ -166,6 +166,23 @@ extension DomainValidator {
         result.merge(role(evaluation.cutoff, expected: .evaluationCutoff))
         if evaluation.cutoff.content.knownValue?.end == nil { result.add(.missingCutoff) }
         if context.find(evaluation.methodologyVersionID) == nil { result.add(.missingReference(ObjectReference(kind: .methodology, id: evaluation.methodologyVersionID))) }
+        if let replacedID = evaluation.replacesEvaluationID {
+            if let previous = context.find(replacedID) {
+                if previous.caseID != evaluation.caseID || !previous.hasHistoricalApproval ||
+                    previous.metadata.createdAt > evaluation.metadata.createdAt {
+                    result.add(.relationshipMismatch(ObjectReference(kind: .caseEvaluation, id: replacedID)))
+                }
+                result.merge(review(previous.approval, in: context))
+            } else { result.add(.missingReference(ObjectReference(kind: .caseEvaluation, id: replacedID))) }
+            var visited: Set<EntityID<CaseEvaluation>> = [evaluation.id]
+            var next: EntityID<CaseEvaluation>? = replacedID
+            while let id = next {
+                guard visited.insert(id).inserted else {
+                    result.add(.relationshipMismatch(ObjectReference(kind: .caseEvaluation, id: id))); break
+                }
+                next = context.find(id)?.replacesEvaluationID
+            }
+        }
         guard let snapshot = context.find(evaluation.caseRevisionID) else {
             result.add(.missingReference(ObjectReference(kind: .caseRevision, id: evaluation.caseRevisionID))); return result
         }
