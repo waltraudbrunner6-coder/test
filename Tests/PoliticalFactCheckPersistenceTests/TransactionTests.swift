@@ -289,4 +289,44 @@ final class TransactionTests: XCTestCase {
         }
     }
 
+    func testSharedActorUpdateCannotBreakAnotherCase() async throws {
+        try await MainActor.run {
+            let f = try PersistenceFixture()
+            let other = try PersistenceFixture()
+            let store = try LocalCaseStore.inMemory()
+            try store.saveCase(f.context())
+            var otherDTO = CaseGraphDTO(try draftGraph(other))
+            otherDTO.actors.append(ActorDTO(f.party))
+            let otherOriginal = try otherDTO.domain()
+            try store.saveCase(otherOriginal)
+            var dto = CaseGraphDTO(f.context())
+            let affiliation = ActorAffiliation(actorID: f.party.id, role: text("Synthetic association"),
+                validity: try .instant(PersistenceFixture.event, role: .validity))
+            dto.affiliations.append(ActorAffiliationDTO(affiliation))
+            dto.actors[1].affiliationIDs = [StoredID(affiliation.id, kind: "ActorAffiliation")]
+            XCTAssertThrowsError(try store.saveCase(dto.domain()))
+            assertGraphsEqual(f.context(), try XCTUnwrap(store.loadCase(id: f.politicalCase.id)))
+            assertGraphsEqual(otherOriginal, try XCTUnwrap(store.loadCase(id: other.politicalCase.id)))
+        }
+    }
+
+    func testDraftDeletionStopsWhenAnotherManifestIsDamaged() async throws {
+        try await MainActor.run {
+            let f = try PersistenceFixture()
+            let other = try PersistenceFixture()
+            let store = try LocalCaseStore.inMemory()
+            try store.saveCase(f.context())
+            let draft = try draftGraph(other)
+            try store.saveCase(draft)
+            let context = store.freshContext()
+            let row = try XCTUnwrap(context.fetch(FetchDescriptor<PersistenceSchemaV1.CaseRecord>())
+                .first { $0.id == f.politicalCase.id.rawValue })
+            var manifest = try PayloadCodec.decode(CaseManifest.self, from: row.manifest)
+            manifest.sourceVersions = []
+            row.manifest = try PayloadCodec.encode(manifest); try context.save()
+            XCTAssertThrowsError(try store.deleteDraftCase(id: other.politicalCase.id))
+            assertGraphsEqual(draft, try XCTUnwrap(store.loadCase(id: other.politicalCase.id)))
+        }
+    }
+
 }

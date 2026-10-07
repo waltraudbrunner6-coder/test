@@ -16,7 +16,7 @@ Alle Reads und Writes validieren den vollständigen DomainContext mit den besteh
 
 ## Store und Transaktionen
 
-`LocalCaseStore` bietet `inMemory()`, `at(url:)`, `saveCase`, `loadCase`, `listCases` und `deleteDraftCase`. Ein Save erwartet genau einen vollständigen, referenziell geschlossenen Case-Graphen. Gemeinsame Akteure, Quellen oder Reviewer können in mehreren Fallmanifesten vorkommen; erstmaliges Einbringen einer bereits gespeicherten ID mit anderem Inhalt wird verweigert.
+`LocalCaseStore` bietet `inMemory()`, `at(url:)`, `saveCase`, `loadCase`, `listCases` und `deleteDraftCase`. Ein Save erwartet genau einen vollständigen, referenziell geschlossenen Case-Graphen. Gemeinsame Akteure, Quellen oder Reviewer können in mehreren Fallmanifesten vorkommen; erstmaliges Einbringen einer bereits gespeicherten ID mit anderem Inhalt wird verweigert. Vor dem Commit werden auch die übrigen gespeicherten Fälle validiert, damit gemeinsame Daten keine fremden Referenzen beschädigen. Eine Entwurfs-Löschung prüft ebenfalls die anderen Manifeste vor der Bereinigung.
 
 Jede Operation verwendet einen frischen ModelContext; Autosave ist deaktiviert. Ein Schreibvorgang speichert erst nach sämtlichen Prüfungen einmalig, Fehler führen zu Rollback. Es werden keine verwalteten SwiftData-Objekte an Aufrufer zurückgegeben. `@MainActor` serialisiert die synchronen Operationen für den vorgesehenen einzelnen lokalen Writer. Die App soll eine Store-Instanz pro Container verwenden.
 
@@ -40,7 +40,7 @@ SwiftData-Schema-Version: **1.0.0**, Payload-Format: **1**. `PersistenceMigratio
 
 ## Tests und Prüfstand
 
-40 neue XCTest-Testmethoden: Roundtrips aller 23 Typen, frische Contexts, getrennte Quellenfassungen/Revisionen, konkrete Snapshot-IDs, ReviewRequired mit Audits, neue freigegebene Ersatzbewertung, konservatives Löschen, Rollback, beschädigte Beziehungen/Payloads, doppelte IDs, falsche ID-Typen und Statuswerte. Ausschließlich synthetische Inhalte. Standardmäßig In-Memory; ein separater Wiederöffnungstest verwendet ausschließlich einen eigenen temporären Ordner und entfernt ihn anschließend.
+42 neue XCTest-Testmethoden: Roundtrips aller 23 Typen, frische Contexts, getrennte Quellenfassungen/Revisionen, konkrete Snapshot-IDs, ReviewRequired mit Audits, neue freigegebene Ersatzbewertung, konservatives Löschen, Rollback, beschädigte Beziehungen/Payloads, doppelte IDs, falsche ID-Typen und Statuswerte. Ausschließlich synthetische Inhalte. Standardmäßig In-Memory; ein separater Wiederöffnungstest verwendet ausschließlich einen eigenen temporären Ordner und entfernt ihn anschließend.
 
 Die 90 bisherigen Domain-Tests wurden nicht verändert. Deren Ausgangsstand `b114ee40015e28c17e26cd1555ba555f63100e6b` ist laut bestätigtem Nutzerbericht auf macOS-15 mit Apple Swift 6.1.2 erfolgreich (90 Tests, 0 Fehler). Dies ist kein Testnachweis für die neue Persistenzschicht.
 

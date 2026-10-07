@@ -8,7 +8,7 @@ Eigenständiges Swift Package `PoliticalFactCheckCore`, Swift-Tools-Version 5.9,
 
 Der Ausgangsstand `b114ee40015e28c17e26cd1555ba555f63100e6b` ist laut ausdrücklich bestätigtem Nutzerbericht erfolgreich auf macOS-15 mit Apple Swift 6.1.2 kompiliert und getestet: 90 Tests, 0 Fehler, GitHub-Actions-Lauf „Validate domain core and clarify review workflow“. Damit ist dieser Domain-Core als `DOMAIN CORE READY` bestätigt.
 
-Lokal bleiben `swift` und `swiftc` nicht verfügbar (`command not found`, Exit 127). Die neue Phase 2.2 ergänzt ein separates SwiftData-Target und 40 weitere Tests; diese benötigen einen eigenen macOS-CI-Nachweis. Die bestehende `.github/workflows/swift-tests.yml` führt beide Targets aus. Die lokale GitHub-CLI meldet weiterhin fehlerhafte Authentifizierung; daraus wird kein erfolgreiches neues CI-Ergebnis abgeleitet. Einzelheiten zu Persistenzabbildung, atomaren Operationen und verbleibenden Grenzen stehen in [persistence-notes.md](persistence-notes.md).
+Lokal bleiben `swift` und `swiftc` nicht verfügbar (`command not found`, Exit 127). Die neue Phase 2.2 ergänzt ein separates SwiftData-Target und 42 weitere Tests; diese benötigen einen eigenen macOS-CI-Nachweis. Die bestehende `.github/workflows/swift-tests.yml` führt beide Targets aus. Die lokale GitHub-CLI meldet weiterhin fehlerhafte Authentifizierung; daraus wird kein erfolgreiches neues CI-Ergebnis abgeleitet. Einzelheiten zu Persistenzabbildung, atomaren Operationen und verbleibenden Grenzen stehen in [persistence-notes.md](persistence-notes.md).
 
 ## Swift-Repräsentation und konservative Präzisierungen
 

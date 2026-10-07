@@ -727,6 +727,10 @@ extension LocalCaseStore {
                 context.insert(PersistenceSchemaV1.ScriptStatementRecord(id: value.id.value, payload: payload))
             }
         }
+        // Shared records may not invalidate another aggregate's manifest or references.
+        for other in try context.fetch(FetchDescriptor<PersistenceSchemaV1.CaseRecord>()) where other.id != root.id.rawValue {
+            _ = try readCase(other.id, in: context)
+        }
     }
 
     func removeDraft(_ id: UUID, in context: ModelContext) throws {
@@ -738,6 +742,7 @@ extension LocalCaseStore {
         }
         let roots = try context.fetch(FetchDescriptor<PersistenceSchemaV1.CaseRecord>())
         let others = try roots.filter { $0.id != id }.map { row -> CaseManifest in
+            _ = try readCase(row.id, in: context)
             try checkFormat(row.formatVersion)
             return try PayloadCodec.decode(CaseManifest.self, from: row.manifest)
         }
