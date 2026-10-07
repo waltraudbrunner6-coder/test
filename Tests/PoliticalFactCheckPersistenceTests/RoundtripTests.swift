@@ -35,7 +35,7 @@ final class RoundtripTests: XCTestCase {
             let url = directory.appendingPathComponent("roundtrip.store")
             let f = try PersistenceFixture()
             let original = f.context()
-            func writeAndRelease() throws {
+            @MainActor func writeAndRelease() throws {
                 let store = try LocalCaseStore.at(url: url)
                 try store.saveCase(original)
             }

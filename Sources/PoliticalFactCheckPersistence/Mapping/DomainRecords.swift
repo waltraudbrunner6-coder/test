@@ -172,7 +172,7 @@ struct CriterionRevisionDTO: Codable, Equatable {
             conditions: conditions.domain { try $0.map { try NonEmptyText($0) } },
             isCore: isCore,
             materialityRule: NonEmptyText(materialityRule),
-            weight: weight.map { try $0 },
+            weight: weight.map { $0 },
             weightReason: weightReason.map { try NonEmptyText($0) },
             metadata: metadata.domain(),
             state: readCriterionRevisionState(state),
@@ -368,12 +368,12 @@ struct ResearchTaskDTO: Codable, Equatable {
             caseID: caseID.domain(Case.self, kind: "Case"),
             goal: NonEmptyText(goal),
             criterionRevisionIDs: criterionRevisionIDs.map { try $0.domain(CriterionRevision.self, kind: "CriterionRevision") },
-            query: query.map { try $0 },
+            query: query.map { $0 },
             status: readResearchTaskStatus(status),
-            result: result.map { try $0 },
-            failureKind: failureKind.map { try $0 },
-            attemptedAt: attemptedAt.map { try $0 },
-            nextStep: nextStep.map { try $0 },
+            result: result.map { $0 },
+            failureKind: failureKind.map { $0 },
+            attemptedAt: attemptedAt.map { $0 },
+            nextStep: nextStep.map { $0 },
             sourceIDs: sourceIDs.map { try $0.domain(Source.self, kind: "Source") },
             excerptIDs: excerptIDs.map { try $0.domain(SourceExcerpt.self, kind: "SourceExcerpt") },
             author: author.domain(),
@@ -519,17 +519,41 @@ struct CaseRevisionDTO: Codable, Equatable {
         metadata = MetadataDTO(value.metadata)
     }
     func domain() throws -> PoliticalFactCheckCore.CaseRevision {
-        try PoliticalFactCheckCore.CaseRevision(
+        let mappedCriteria = try criteria.map { value in
+            StateSnapshot(id: try value.id.domain(CriterionRevision.self, kind: "CriterionRevision"),
+                          state: try readCriterionRevisionState(value.state))
+        }
+        let mappedParticipations = try participations.map { value in
+            StateSnapshot(id: try value.id.domain(ActionParticipation.self, kind: "ActionParticipation"),
+                          state: try readFactVerificationState(value.state))
+        }
+        let mappedSourceVersions = try sourceVersions.map { value in
+            StateSnapshot(id: try value.id.domain(SourceVersion.self, kind: "SourceVersion"),
+                          state: try readFactVerificationState(value.state))
+        }
+        let mappedExcerpts = try excerpts.map { value in
+            StateSnapshot(id: try value.id.domain(SourceExcerpt.self, kind: "SourceExcerpt"),
+                          state: try readExcerptVerificationState(value.state))
+        }
+        let mappedEvidenceLinks = try evidenceLinks.map { value in
+            StateSnapshot(id: try value.id.domain(EvidenceLink.self, kind: "EvidenceLink"),
+                          state: try readEvidenceLinkStatus(value.state))
+        }
+        let mappedResearchTasks = try researchTasks.map { value in
+            StateSnapshot(id: try value.id.domain(ResearchTask.self, kind: "ResearchTask"),
+                          state: try readResearchTaskStatus(value.state))
+        }
+        return try PoliticalFactCheckCore.CaseRevision(
             id: id.domain(CaseRevision.self, kind: "CaseRevision"),
             caseID: caseID.domain(Case.self, kind: "Case"),
             promiseRevisionID: promiseRevisionID.domain(PromiseRevision.self, kind: "PromiseRevision"),
-            criteria: criteria.map { try StateSnapshot(id: try $0.id.domain(CriterionRevision.self, kind: "CriterionRevision"), state: try readCriterionRevisionState($0.state)) },
+            criteria: mappedCriteria,
             actionRevisionIDs: actionRevisionIDs.map { try $0.domain(ActionRevision.self, kind: "ActionRevision") },
-            participations: participations.map { try StateSnapshot(id: try $0.id.domain(ActionParticipation.self, kind: "ActionParticipation"), state: try readFactVerificationState($0.state)) },
-            sourceVersions: sourceVersions.map { try StateSnapshot(id: try $0.id.domain(SourceVersion.self, kind: "SourceVersion"), state: try readFactVerificationState($0.state)) },
-            excerpts: excerpts.map { try StateSnapshot(id: try $0.id.domain(SourceExcerpt.self, kind: "SourceExcerpt"), state: try readExcerptVerificationState($0.state)) },
-            evidenceLinks: evidenceLinks.map { try StateSnapshot(id: try $0.id.domain(EvidenceLink.self, kind: "EvidenceLink"), state: try readEvidenceLinkStatus($0.state)) },
-            researchTasks: researchTasks.map { try StateSnapshot(id: try $0.id.domain(ResearchTask.self, kind: "ResearchTask"), state: try readResearchTaskStatus($0.state)) },
+            participations: mappedParticipations,
+            sourceVersions: mappedSourceVersions,
+            excerpts: mappedExcerpts,
+            evidenceLinks: mappedEvidenceLinks,
+            researchTasks: mappedResearchTasks,
             metadata: metadata.domain()
         )
     }
@@ -686,7 +710,7 @@ struct ReviewerIdentityDTO: Codable, Equatable {
         try PoliticalFactCheckCore.ReviewerIdentity(
             id: id.domain(ReviewerIdentity.self, kind: "ReviewerIdentity"),
             displayName: NonEmptyText(displayName),
-            note: note.map { try $0 }
+            note: note.map { $0 }
         )
     }
 }
@@ -709,7 +733,7 @@ struct ActorDTO: Codable, Equatable {
             id: id.domain(Actor.self, kind: "Actor"),
             name: NonEmptyText(name),
             type: readActorType(type),
-            description: description.map { try $0 },
+            description: description.map { $0 },
             affiliationIDs: affiliationIDs.map { try $0.domain(ActorAffiliation.self, kind: "ActorAffiliation") }
         )
     }
