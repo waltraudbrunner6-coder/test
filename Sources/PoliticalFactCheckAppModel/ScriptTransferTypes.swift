@@ -1,0 +1,6 @@
+import PoliticalFactCheckScripting
+
+// UI can use the neutral contract through its existing AppModel package product.
+public typealias ScriptGenerationInput = PoliticalFactCheckScripting.ScriptGenerationInput
+public typealias ScriptGenerationOutput = PoliticalFactCheckScripting.ScriptGenerationOutput
+public typealias GeneratedScriptStatement = PoliticalFactCheckScripting.GeneratedScriptStatement

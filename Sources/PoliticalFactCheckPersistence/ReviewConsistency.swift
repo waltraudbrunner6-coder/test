@@ -2,6 +2,15 @@ import PoliticalFactCheckCore
 
 /// Complete-graph saves cannot bypass the domain's operational review requests.
 func validateReviewUpdates(from old: DomainContext, to new: DomainContext) throws {
+    // A complete graph save must obey the same statement lifecycle operation as the explicit API.
+    for statement in new.statements {
+        guard let previous = old.find(statement.id), previous.review == nil, let review = statement.review else { continue }
+        let reviewContext = new.withScripts(old.scripts, statements: old.statements)
+        let expected = try domainChange { try DomainChanges.reviewScriptStatement(previous, review: review, in: reviewContext) }
+        guard expected == statement else {
+            throw PersistenceError.immutableRecord(kind: "ScriptStatement", id: statement.id.rawValue)
+        }
+    }
     var affected = Set<EntityID<CaseEvaluation>>()
     for link in new.evidenceLinks where link.status == .verified && old.find(link.id)?.status != .verified {
         let requests = try domainChange {

@@ -1,11 +1,13 @@
 import Foundation
 import PoliticalFactCheckCore
+import PoliticalFactCheckScripting
 import PoliticalFactCheckPersistence
 
 public enum WorkspaceErrorMessage {
     public static func describe(_ error: Error) -> String {
         if let error = error as? PersistenceError {
             switch error {
+            case .scriptGeneration(let error): return describe(error)
             case .invalidAggregate: return "Der Fall enthält nicht genau ein vollständiges Versprechen."
             case .invalidDomain(let errors): return errors.map(describe).joined(separator: "\n")
             case .invalidEnum(let type, let value): return "Ein gespeicherter Status ist ungültig (\(type): \(value))."
@@ -29,6 +31,7 @@ public enum WorkspaceErrorMessage {
             case .storage(let operation, let detail): return "Speicherfehler bei \(operation): \(detail)"
             }
         }
+        if let error = error as? ScriptGenerationError { return describe(error) }
         if let error = error as? DomainValidationError { return describe(error) }
         if let error = error as? WorkspaceInputError {
             switch error {
@@ -48,6 +51,24 @@ public enum WorkspaceErrorMessage {
             }
         }
         return "Die Änderung konnte nicht gespeichert werden. Details: \(String(describing: error))"
+    }
+
+    private static func describe(_ error: ScriptGenerationError) -> String {
+        switch error {
+        case .evaluationUnavailable: return "Für den Skriptentwurf fehlt eine freigegebene Bewertung."
+        case .evaluationNotApproved(let status):
+            return status == .reviewRequired ? "Bewertung muss erneut geprüft werden." : "Skripte benötigen eine aktuell freigegebene Bewertung."
+        case .snapshotUnavailable: return "Der Bewertungssnapshot fehlt."
+        case .invalidSnapshot: return "Die Fundstellen oder Evidenz sind nicht geprüft oder passen nicht zum Bewertungssnapshot."
+        case .unknownExcerptKey(let key): return "Unbekannte oder Snapshot-fremde Fundstelle: \(key). Der Entwurf wurde nicht gespeichert."
+        case .unknownEvidenceKey(let key): return "Unbekannte oder Snapshot-fremde Evidenz: \(key). Der Entwurf wurde nicht gespeichert."
+        case .factWithoutExcerpt: return "Ein Tatsachensatz benötigt mindestens eine geprüfte Fundstelle aus dem Snapshot."
+        case .inconsistentEvidence(let key): return "Die Fundstellen passen nicht zur referenzierten Evidenz \(key)."
+        case .invalidDuration: return "Die Zielzeit muss zwischen 30 und 60 Sekunden liegen."
+        case .emptyOutput, .invalidPosition, .blankText, .duplicateKey: return "Ungültige Skriptausgabe: prüfe Texte, Positionen und doppelte Referenzen."
+        case .providerFailure(let message): return "Skript-Provider fehlgeschlagen: \(message)"
+        case .generationInProgress: return "Ein Skriptentwurf wird bereits erzeugt."
+        }
     }
 
     private static func describe(_ error: DomainValidationError) -> String {
@@ -74,7 +95,7 @@ public enum WorkspaceErrorMessage {
         case .speakerAssignmentUnavailable: return "Für die Sprecherprüfung fehlt ein vorhandener Sprecher-Akteur."
         case .historicalReadinessChangeDenied: return "Dieser Fall besitzt bereits einen Bewertungssnapshot oder eine Bewertung. Die direkte Neubindung ist gesperrt; eine spätere Neubewertung benötigt einen eigenen Vorgang."
         case .readinessRequiresDocumentedCase: return "Bestätige den Prüfrahmen eines dokumentierten Falls vor den weiteren Workflowübergängen."
-        case .missingHumanReview: return "Für diese Verifikation ist eine menschliche Prüfung erforderlich."
+        case .missingHumanReview: return "Eine menschliche Prüfung ist erforderlich. Prüfe vor Skriptfreigabe auch jeden einzelnen Satz."
         case .unknownVerifiedValue: return "Ein unbekannter oder nicht anwendbarer Wert darf nicht als verifiziert markiert sein."
         case .missingSourceIdentity: return "Die Quelle braucht eine URL oder Dokumentkennung."
         case .invalidRevisionNumber: return "Die Revisionsnummer muss größer als null sein."

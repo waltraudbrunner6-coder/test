@@ -2,6 +2,7 @@ import Combine
 import Foundation
 import PoliticalFactCheckCore
 import PoliticalFactCheckPersistence
+import PoliticalFactCheckScripting
 
 @MainActor
 public final class CaseWorkspaceModel: ObservableObject {
@@ -14,6 +15,8 @@ public final class CaseWorkspaceModel: ObservableObject {
     @Published public var reviewerName: String {
         didSet { defaults.set(reviewerName, forKey: Self.reviewerNameKey) }
     }
+
+    @Published public private(set) var isGeneratingScript = false
 
     private static let reviewerNameKey = "politicalFactCheck.reviewerName"
     private static let reviewerIDKey = "politicalFactCheck.reviewerID"
@@ -580,6 +583,71 @@ public final class CaseWorkspaceModel: ObservableObject {
         return (try? DomainChanges.transition(link, to: status,
             review: status == .verified ? HumanReview(reviewerID: reviewer.id, reviewedAt: Date()) : nil,
             in: graph)) != nil
+    }
+
+    public func scriptInput(evaluationID: EntityID<CaseEvaluation>, targetDurationSeconds: Double = 45) throws -> ScriptGenerationInput {
+        guard let store, let caseID = selectedCaseID, let graph = try store.loadCase(id: caseID) else {
+            throw WorkspaceInputError.caseUnavailable
+        }
+        return try ScriptInputBuilder.build(evaluationID: evaluationID, targetDurationSeconds: targetDurationSeconds, in: graph)
+    }
+
+    @discardableResult
+    public func generateScript(evaluationID: EntityID<CaseEvaluation>, targetDurationSeconds: Double = 45,
+                               provider: any ScriptGenerationProvider = FakeScriptGenerationProvider()) async -> EntityID<ScriptDraft>? {
+        guard !isGeneratingScript else { present(ScriptGenerationError.generationInProgress); return nil }
+        isGeneratingScript = true
+        defer { isGeneratingScript = false }
+        do {
+            guard let store, let caseID = selectedCaseID else { throw WorkspaceInputError.caseUnavailable }
+            let reviewer = try currentReviewer()
+            let input = try scriptInput(evaluationID: evaluationID, targetDurationSeconds: targetDurationSeconds)
+            let output: ScriptGenerationOutput
+            do { output = try await provider.generateScript(input: input) }
+            catch { throw ScriptGenerationError.providerFailure(String(describing: error)) }
+            try Task.checkCancellation()
+            let script = try store.saveGeneratedScriptDraft(caseID: caseID, evaluationID: evaluationID,
+                output: output, targetDurationSeconds: targetDurationSeconds, providerIdentifier: provider.identifier, reviewer: reviewer, at: Date())
+            reload(selecting: caseID)
+            return script.id
+        } catch { present(error); return nil }
+    }
+
+    @discardableResult
+    public func createManualScript(evaluationID: EntityID<CaseEvaluation>, output: ScriptGenerationOutput,
+                                   targetDurationSeconds: Double = 45) -> EntityID<ScriptDraft>? {
+        do {
+            guard let store, let caseID = selectedCaseID else { throw WorkspaceInputError.caseUnavailable }
+            let script = try store.saveManualScriptDraft(caseID: caseID, evaluationID: evaluationID,
+                output: output, targetDurationSeconds: targetDurationSeconds, reviewer: currentReviewer(), at: Date())
+            reload(selecting: caseID)
+            return script.id
+        } catch { present(error); return nil }
+    }
+
+    @discardableResult
+    public func reviewScriptStatement(_ id: EntityID<ScriptStatement>) -> Bool {
+        do {
+            guard let store, let caseID = selectedCaseID else { throw WorkspaceInputError.caseUnavailable }
+            try store.reviewScriptStatement(caseID: caseID, statementID: id, reviewer: currentReviewer(), at: Date())
+            reload(selecting: caseID)
+            return true
+        } catch { present(error); return false }
+    }
+
+    @discardableResult
+    public func submitScriptForReview(_ id: EntityID<ScriptDraft>) -> Bool { scriptStatus(id, approve: false) }
+    @discardableResult
+    public func approveScript(_ id: EntityID<ScriptDraft>) -> Bool { scriptStatus(id, approve: true) }
+    private func scriptStatus(_ id: EntityID<ScriptDraft>, approve: Bool) -> Bool {
+        do {
+            guard let store, let caseID = selectedCaseID else { throw WorkspaceInputError.caseUnavailable }
+            let reviewer = try currentReviewer()
+            if approve { try store.approveScript(caseID: caseID, scriptID: id, reviewer: reviewer, at: Date()) }
+            else { try store.submitScriptForReview(caseID: caseID, scriptID: id, reviewer: reviewer, at: Date()) }
+            reload(selecting: caseID)
+            return true
+        } catch { present(error); return false }
     }
 
     public func dismissError() { errorMessage = nil }

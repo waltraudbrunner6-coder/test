@@ -8,6 +8,7 @@ struct CaseDetailView: View {
     let graph: DomainContext
     @ObservedObject var workspace: CaseWorkspaceModel
     @Binding var sheet: EditorSheet?
+    @State private var scriptTargetSeconds: Double = 45
 
     private var promise: PromiseRevision? { graph.find(politicalCase.currentPromiseRevisionID) }
     private var activeCriteria: [CriterionRevision] {
@@ -38,12 +39,123 @@ struct CaseDetailView: View {
                 actionsSection
                 evidenceSection
                 evaluationSection
+                scriptSection
                 deleteDraftSection
             }
             .padding(24)
             .frame(maxWidth: 900, alignment: .leading)
         }
         .navigationTitle(politicalCase.title.value)
+    }
+
+    private var scriptSection: some View {
+        section("Skript", systemImage: "text.alignleft") {
+            Text("Lokaler Test-Provider – keine echte KI").font(.subheadline).foregroundStyle(.secondary)
+            Text("Zielzeit ist ein Planwert; keine gemessene Sprechdauer.").font(.caption)
+            Stepper("Zielzeit: \(Int(scriptTargetSeconds)) Sekunden", value: $scriptTargetSeconds, in: 30...60, step: 5)
+            ForEach(evaluations, id: \.id) { evaluation in
+                scriptGenerationActions(evaluation)
+            }
+            if graph.scripts.isEmpty { Text("Noch kein Skriptentwurf.").foregroundStyle(.secondary) }
+            ForEach(graph.scripts.sorted { $0.createdAt < $1.createdAt }, id: \.id) { script in
+                scriptCard(script)
+                Divider()
+            }
+        }
+    }
+
+    @ViewBuilder private func scriptGenerationActions(_ evaluation: CaseEvaluation) -> some View {
+        if evaluation.status == .approved {
+            HStack {
+                Button("Skriptentwurf erzeugen") {
+                    Task { await workspace.generateScript(evaluationID: evaluation.id, targetDurationSeconds: scriptTargetSeconds) }
+                }.disabled(workspace.isGeneratingScript)
+                Button("Manuellen Entwurf anlegen") { sheet = .manualScript(evaluation.id, nil) }
+            }
+        } else if evaluation.status == .reviewRequired {
+            Text("Bewertung muss erneut geprüft werden").foregroundStyle(.orange)
+        }
+    }
+
+    private func scriptCard(_ script: ScriptDraft) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Version \(script.version) · \(script.status.scriptLabel)").font(.headline)
+            Text("Zielzeit: \(Int(script.targetDurationSeconds)) Sekunden · \(script.createdAt.formatted())").font(.caption)
+            Text("Evaluation: \(script.caseEvaluationID.rawValue.uuidString)").font(.caption).textSelection(.enabled)
+            Text(scriptAuthor(script.author)).font(.caption)
+            if let review = script.approval {
+                Text("Historisch freigegeben: \(graph.find(review.reviewerID)?.displayName.value ?? "Reviewer fehlt") · \(review.reviewedAt.formatted())").font(.caption)
+            }
+            ForEach(script.statementIDs.compactMap { graph.find($0) }.sorted { $0.position < $1.position }, id: \.id) { statement in
+                scriptStatementRow(statement, script: script)
+            }
+            scriptLifecycleActions(script)
+        }
+    }
+
+    private func scriptStatementRow(_ statement: ScriptStatement, script: ScriptDraft) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("\(statement.position + 1). \(statement.kind.scriptLabel)").font(.subheadline)
+            Text(statement.text.value).textSelection(.enabled)
+            if let uncertainty = statement.uncertainty { Text("Unsicherheit: \(uncertainty.value)").foregroundStyle(.secondary) }
+            if let review = statement.review {
+                Text("Menschlich geprüft: \(graph.find(review.reviewerID)?.displayName.value ?? "Reviewer fehlt") · \(review.reviewedAt.formatted())").font(.caption)
+            } else {
+                Text("Ungeprüfter Satz").foregroundStyle(.orange)
+                if (script.status == .draft || script.status == .needsReview), graph.find(script.caseEvaluationID)?.status == .approved {
+                    Button("Statement prüfen") { workspace.reviewScriptStatement(statement.id) }
+                }
+            }
+            scriptStatementSources(statement)
+        }.padding(8)
+    }
+
+    private func scriptStatementSources(_ statement: ScriptStatement) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(statement.excerptIDs, id: \.self) { id in
+                if let excerpt = graph.find(id), let source = graph.find(excerpt.sourceVersionID) {
+                    DisclosureGroup("\(source.title?.value ?? "Quellenfassung") · \(excerpt.locator.value)") {
+                        HStack(alignment: .top, spacing: 16) {
+                            Text(statement.text.value).frame(maxWidth: .infinity, alignment: .leading)
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(source.publisher?.value ?? "Herausgeber nicht erfasst")
+                                Text("\(excerpt.locator.value) · \(excerpt.state.displayName)")
+                                Text(excerpt.text.value).textSelection(.enabled)
+                                Text(excerpt.context.value).font(.caption)
+                            }.frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                }
+            }
+            ForEach(statement.evidenceLinkIDs, id: \.self) { id in
+                if let link = graph.find(id) {
+                    Text("Evidenz: \(link.relationship.displayName) · \(link.directness.displayName) · \(link.rationale.value)").font(.caption)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private func scriptLifecycleActions(_ script: ScriptDraft) -> some View {
+        if graph.find(script.caseEvaluationID)?.status == .approved {
+            HStack {
+                Button("Als neue Version bearbeiten") { sheet = .manualScript(script.caseEvaluationID, script.id) }
+                if script.status == .draft {
+                    Button("Skript zur Prüfung vorlegen") { workspace.submitScriptForReview(script.id) }
+                } else if script.status == .needsReview {
+                    Button("Skript freigeben") { workspace.approveScript(script.id) }
+                }
+            }
+        } else {
+            Text("Bewertung muss erneut geprüft werden").foregroundStyle(.orange)
+        }
+    }
+
+    private func scriptAuthor(_ author: Authorship) -> String {
+        switch author {
+        case .human(let id): return "Manuell: \(graph.find(id)?.displayName.value ?? "Reviewer fehlt")"
+        case .ai(let model, _): return "Provider-Herkunft (ungeprüfter Entwurf): \(model.value)"
+        case .system: return "System-Herkunft"
+        }
     }
 
     private var overviewSection: some View {
@@ -666,5 +778,26 @@ private extension EvidenceLinkStatus {
                     speakerName: "Synthetische Sprecherin", partyName: "Synthetische Organisation",
                     statementDate: nil)
             }
+    }
+}
+
+private extension ScriptStatus {
+    var scriptLabel: String {
+        switch self {
+        case .draft: return "Entwurf"
+        case .needsReview: return "Zur Prüfung vorgelegt"
+        case .approved: return "Freigegeben"
+        case .superseded: return "Überholt (historisch erhalten)"
+        }
+    }
+}
+private extension ScriptStatementKind {
+    var scriptLabel: String {
+        switch self {
+        case .fact: return "Tatsache"
+        case .interpretation: return "Interpretation"
+        case .question: return "Frage"
+        case .qualification: return "Einschränkung"
+        }
     }
 }

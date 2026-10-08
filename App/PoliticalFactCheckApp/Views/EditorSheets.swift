@@ -769,3 +769,118 @@ extension NotVerifiableReason {
         }
     }
 }
+
+// Local form data only. Saving always creates new Domain IDs and resets every review.
+private struct ScriptStatementForm: Identifiable {
+    let id = UUID()
+    var text = ""
+    var kindIndex = 1
+    var excerptKeys = ""
+    var evidenceKeys = ""
+    var uncertainty = ""
+}
+
+struct ManualScriptSheet: View {
+    @EnvironmentObject private var workspace: CaseWorkspaceModel
+    @Environment(\.dismiss) private var dismiss
+    let evaluationID: EntityID<CaseEvaluation>
+    let sourceID: EntityID<ScriptDraft>?
+    @State private var input: ScriptGenerationInput?
+    @State private var forms: [ScriptStatementForm] = [ScriptStatementForm()]
+    @State private var target: Double = 45
+    @State private var message: String?
+    private let kinds: [ScriptStatementKind] = [.fact, .interpretation, .question, .qualification]
+    private let labels = ["Tatsache", "Interpretation", "Frage", "Einschränkung"]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(sourceID == nil ? "Manueller Skriptentwurf" : "Neue Skriptversion").font(.title2)
+            Text("Alte Inhalte bleiben erhalten. Neue Sätze beginnen ungeprüft.").font(.caption)
+            Stepper("Zielzeit: \(Int(target)) Sekunden", value: $target, in: 30...60, step: 5)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    referenceList
+                    ForEach(Array(forms.indices), id: \.self) { index in statementEditor(index) }
+                    Button("Satz hinzufügen") { forms.append(ScriptStatementForm()) }
+                }
+            }
+            if let message { Text(message).foregroundStyle(.red) }
+            if let error = workspace.errorMessage { Text(error).foregroundStyle(.red) }
+            HStack {
+                Button("Abbrechen") { dismiss() }
+                Spacer()
+                Button("Als neuen Entwurf speichern") { save() }.disabled(input == nil)
+            }
+        }.padding(20).frame(width: 700, height: 620).onAppear { load() }
+    }
+
+    private var referenceList: some View {
+        DisclosureGroup("Verfügbare Snapshot-Fundstellen und Evidenz") {
+            if let input {
+                ForEach(input.excerpts, id: \.key) { item in
+                    Text("\(item.key) · \(item.sourceKey) · \(item.excerpt.locator.value): \(item.excerpt.text.value)")
+                        .font(.caption).textSelection(.enabled)
+                }
+                ForEach(input.evidence, id: \.key) { item in
+                    Text("\(item.key) · \(item.excerptKeys.joined(separator: ", ")): \(item.link.rationale.value)")
+                        .font(.caption).textSelection(.enabled)
+                }
+            }
+        }
+    }
+
+    private func statementEditor(_ index: Int) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Satz \(index + 1)").font(.headline)
+            Picker("Typ", selection: $forms[index].kindIndex) {
+                ForEach(0..<labels.count, id: \.self) { Text(labels[$0]).tag($0) }
+            }
+            TextField("Text", text: $forms[index].text, axis: .vertical).lineLimit(2...6)
+            TextField("Fundstellenkeys, durch Komma getrennt (Tatsache: erforderlich)", text: $forms[index].excerptKeys)
+            TextField("Evidenzkeys, durch Komma getrennt (optional)", text: $forms[index].evidenceKeys)
+            TextField("Unsicherheit (optional)", text: $forms[index].uncertainty)
+            HStack {
+                Button("Nach oben") { forms.swapAt(index, index - 1) }.disabled(index == 0)
+                Button("Nach unten") { forms.swapAt(index, index + 1) }.disabled(index + 1 == forms.count)
+                Button("Satz entfernen") { forms.remove(at: index) }
+            }
+            Divider()
+        }
+    }
+
+    private func load() {
+        do {
+            let loaded = try workspace.scriptInput(evaluationID: evaluationID)
+            input = loaded
+            guard let sourceID, let graph = workspace.selectedContext, let source = graph.find(sourceID) else { return }
+            guard source.caseEvaluationID == evaluationID else { throw ValueError.blankText }
+            target = min(60, max(30, source.targetDurationSeconds))
+            forms = try source.statementIDs.compactMap { graph.find($0) }.sorted { $0.position < $1.position }.map { statement in
+                let ex = try statement.excerptIDs.map { id -> String in
+                    guard let item = loaded.excerpts.first(where: { $0.excerpt.id == id }) else { throw ValueError.blankText }
+                    return item.key
+                }
+                let ev = try statement.evidenceLinkIDs.map { id -> String in
+                    guard let item = loaded.evidence.first(where: { $0.link.id == id }) else { throw ValueError.blankText }
+                    return item.key
+                }
+                return ScriptStatementForm(text: statement.text.value, kindIndex: kinds.firstIndex(of: statement.kind)!,
+                    excerptKeys: ex.joined(separator: ", "), evidenceKeys: ev.joined(separator: ", "),
+                    uncertainty: statement.uncertainty?.value ?? "")
+            }
+        } catch { input = nil; message = "Der freigegebene Snapshot oder die Skriptreferenzen konnten nicht geladen werden: \(error)" }
+    }
+
+    private func keys(_ text: String) -> [String] {
+        if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return [] }
+        return text.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+    }
+    private func save() {
+        let output = ScriptGenerationOutput(statements: forms.enumerated().map { index, form in
+            GeneratedScriptStatement(position: index, text: form.text, kind: kinds[form.kindIndex],
+                referencedExcerptKeys: keys(form.excerptKeys), referencedEvidenceKeys: keys(form.evidenceKeys),
+                uncertainty: form.uncertainty.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : form.uncertainty)
+        })
+        if workspace.createManualScript(evaluationID: evaluationID, output: output, targetDurationSeconds: target) != nil { dismiss() }
+    }
+}

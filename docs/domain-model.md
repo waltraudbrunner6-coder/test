@@ -221,7 +221,7 @@ Feldtypen sind konzeptionell: `ID`, Text, Datumstyp aus 1.2, Enum, Zahl, URL, lo
 - **Versionierung:** ScriptDraft und Statements werden nach Freigabe eingefroren; neue Fassung bei Änderung. KI-Provenienz wird separat von menschlicher Prüfung geführt.
 - **Beziehungen:** Draft referenziert genau eine CaseEvaluation; mehrere Statements; Statements referenzieren null oder mehr Belegstellen, verpflichtend für Tatsachen.
 - **Löschen:** freigegebene Skripte bleiben Teil des redaktionellen Verlaufs; Assetdateien folgen eigener Ablage-/Löschregel.
-- **Invarianten:** freigegebener Tatsachensatz braucht mindestens einen verifizierten Excerpt; Interpretation muss als solche markiert und zugehörige Tatsachenbelege referenziert sein. Freigabe ist menschlich.
+- **Invarianten:** freigegebener Tatsachensatz braucht mindestens einen verifizierten Excerpt; Interpretation muss als solche markiert sein. Gemäß Phase 4.1 dürfen Interpretation/Frage/Einschränkung ohne Fundstellen als Entwurf vorliegen; vorhandene Referenzen müssen geprüft und snapshotgebunden sein. Freigabe ist menschlich.
 
 ### 2.14 ResearchTask
 
@@ -377,3 +377,11 @@ Draft/needsReview dürfen nach Korrektur in neue Draftrevision überführt werde
 Das Modell bleibt für den festgelegten Einzelfall-MVP implementierbar. Externe Rechts-/Aufbewahrungsfristen und konkrete Materialitätsentscheidungen sind außerhalb der technischen Modellstruktur zu klären; sie blockieren die Definition der Domain-Objekte nicht.
 
 Phase 3.2b präzisiert die Aktualitätsableitung: Der erwartete Satz von ActionRevision-IDs umfasst aktuelle Arbeitsköpfe plus ältere Revisionen, auf die aktuell verfügbare verified Links ausdrücklich verweisen. Dieser geschlossene Referenzsatz verhindert einen falschen ReviewRequired-Befund allein durch notwendige historische Evidenzabhängigkeiten; geänderte Arbeitsköpfe oder neue nicht abgedeckte Links erzeugen weiterhin Reviewbedarf.
+
+### Präzisierung Phase 4.1 – Skriptprüfung und Quellenbindung
+
+ScriptStatement-Inhalt bleibt immutable. Als einzige Lifecycle-Ergänzung ist der einmalige Wechsel review=nil → HumanReview erlaubt, durch DomainChanges.reviewScriptStatement: vorhandener gespeicherter Satz, parent draft/needsReview, aktuell approved CaseEvaluation, vorhandene menschliche ReviewerIdentity und Prüfdatum ab Skripterstellung. Ein vorhandener Review darf nicht ersetzt werden. Text, Typ, Position, Unsicherheit und Referenzen dürfen unter derselben ID niemals geändert werden. Inhaltliche Bearbeitung erzeugt eine neue vollständige ScriptDraft-Version mit neuen Satz-IDs und zurückgesetzten Reviews.
+
+Jeder Tatsachensatz benötigt bereits als Entwurf eine geprüfte Fundstelle aus dem konkreten CaseRevision-Snapshot der Evaluation. Auch optionale Referenzen anderer Satztypen müssen darin geprüft sein. Quellenfassungen gehören ebenfalls geprüft zum Manifest. EvidenceLink-Referenzen müssen im Snapshot verified und in den CriterionEvaluations dieser Evaluation verwendet sein; alle Fundstellen eines referenzierten Links müssen am Satz stehen. Ein Skript besitzt mindestens einen Satz mit eindeutiger nicht negativer Position. Freigabe verlangt alle menschlichen Satzprüfungen und weiterhin operativ approved Evaluation; der erlaubte Lifecycle bleibt unverändert. Neue Versionen lösen frühere Freigaben nicht automatisch ab. Sprachliche Wahrheit, Motive und Tragfähigkeit einer Quellenzuordnung bleiben menschlich/fachlich zu prüfen.
+
+Provider-Input/Output sind ausschließlich Transferwerte außerhalb des Domain-Core und keine persistierte Wahrheit oder Evidenz. Provider-Ausgaben erzeugen nur ungeprüfte ScriptDraft-/ScriptStatement-Datensätze. Die vorhandene historisch monotone Case-Freigabe und operative Evaluation-/Script-Reviewlogik bleiben unverändert.

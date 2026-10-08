@@ -1,7 +1,9 @@
 import Foundation
 import PoliticalFactCheckCore
+import PoliticalFactCheckScripting
 
 public enum PersistenceError: Error, Equatable {
+    case scriptGeneration(ScriptGenerationError)
     case invalidAggregate
     case invalidDomain([DomainValidationError])
     case invalidEnum(type: String, value: String)

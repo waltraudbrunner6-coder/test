@@ -54,7 +54,7 @@ func checkReplacement(_ old: ScriptDraft, _ new: ScriptDraft) throws {
 }
 
 func checkReplacement(_ old: ScriptStatement, _ new: ScriptStatement) throws {
-    guard old == new else { throw PersistenceError.immutableRecord(kind: "ScriptStatement", id: old.id.rawValue) }
+    try RevisionRules.validateReplacement(old, with: new)
 }
 
 func checkReplacement(_ old: CaseRevision, _ new: CaseRevision) throws {

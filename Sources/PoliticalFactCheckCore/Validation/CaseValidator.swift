@@ -65,13 +65,44 @@ extension DomainValidator {
         }
         if script.status == .approved || script.status == .superseded { result.merge(review(script.approval, in: context)) }
         result.merge(checkReferences(script.statementIDs, kind: .statement) { context.find($0) != nil })
+        let evaluation = context.find(script.caseEvaluationID)
+        let snapshot = evaluation.flatMap { context.find($0.caseRevisionID) }
+        if let evaluation, snapshot == nil {
+            result.add(.missingReference(ObjectReference(kind: .caseRevision, id: evaluation.caseRevisionID)))
+        }
+        if let evaluation { result.merge(validate(evaluation, in: context)) }
+        if let snapshot { result.merge(validate(snapshot, in: context)) }
+        if script.version < 1 { result.add(.invalidRevisionNumber) }
+        if script.statementIDs.isEmpty { result.add(.relationshipMismatch(ObjectReference(kind: .script, id: script.id))) }
+        let used = evaluation.map { ScriptReferences.usedEvidence(in: $0, graph: context) } ?? []
+        var positions = Set<Int>()
         for id in script.statementIDs {
             guard let statement = context.find(id) else { continue }
-            if statement.scriptDraftID != script.id { result.add(.relationshipMismatch(ObjectReference(kind: .statement, id: id))) }
+            if statement.scriptDraftID != script.id || statement.position < 0 || !positions.insert(statement.position).inserted {
+                result.add(.relationshipMismatch(ObjectReference(kind: .statement, id: id)))
+            }
+            if let review = statement.review { result.merge(DomainValidator.review(review, in: context)) }
             if script.status == .approved || script.status == .superseded {
                 result.merge(review(statement.review, in: context))
-                if statement.kind == .fact && statement.excerptIDs.isEmpty { result.add(.scriptFactWithoutExcerpt) }
-                result.merge(excerpts(statement.excerptIDs, required: statement.kind == .fact, in: context))
+            }
+            if statement.kind == .fact && statement.excerptIDs.isEmpty { result.add(.scriptFactWithoutExcerpt) }
+            result.merge(excerpts(statement.excerptIDs, required: statement.kind == .fact || !statement.excerptIDs.isEmpty,
+                                  in: context, snapshot: snapshot))
+            for excerptID in statement.excerptIDs {
+                if let excerpt = context.find(excerptID), let snapshot,
+                   !snapshot.sourceVersions.contains(where: { $0.id == excerpt.sourceVersionID && $0.state == .verified }) {
+                    result.add(.sourceVersionNotVerified(excerpt.sourceVersionID))
+                }
+            }
+            result.merge(checkReferences(statement.evidenceLinkIDs, kind: .evidenceLink) { context.find($0) != nil })
+            for linkID in statement.evidenceLinkIDs {
+                guard let link = context.find(linkID) else { continue }
+                if !used.contains(linkID) || snapshot?.evidenceLinks.contains(where: { $0.id == linkID && $0.state == .verified }) != true {
+                    result.add(.snapshotMismatch(ObjectReference(kind: .evidenceLink, id: linkID)))
+                }
+                if !link.excerptIDs.allSatisfy({ statement.excerptIDs.contains($0) }) {
+                    result.add(.relationshipMismatch(ObjectReference(kind: .evidenceLink, id: linkID)))
+                }
             }
         }
         return result
