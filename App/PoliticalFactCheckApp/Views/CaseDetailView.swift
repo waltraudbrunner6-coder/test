@@ -34,6 +34,7 @@ struct CaseDetailView: View {
                 promiseSection
                 criteriaSection
                 sourcesSection
+                actionsSection
                 evidenceSection
                 evaluationSection
                 deleteDraftSection
@@ -239,8 +240,70 @@ struct CaseDetailView: View {
         .padding(.leading, 12)
     }
 
+    private var actionsSection: some View {
+        section("Handlungen / Entwicklungen", systemImage: "list.bullet.rectangle") {
+            Button("Handlung hinzufügen") { sheet = .newAction }
+            if politicalCase.currentActionRevisionIDs.isEmpty {
+                Text("Noch keine Handlungen erfasst.").foregroundStyle(.secondary)
+            }
+            ForEach(politicalCase.currentActionRevisionIDs, id: \.self) { id in
+                if let revision = graph.find(id) {
+                    actionRow(revision)
+                    if revision.description.verification == .unreviewed && revision.eventDate.verification == .unreviewed && revision.scope.verification == .unreviewed {
+                        Button("Handlung prüfen") { sheet = .reviewAction(revision.id) }
+                    }
+                    DisclosureGroup("Historische Handlungsrevisionen (nur lesend)") {
+                        ForEach(graph.actionRevisions.filter { $0.actionID == revision.actionID && $0.id != revision.id }.sorted { $0.metadata.number < $1.metadata.number }, id: \.id) { old in
+                            actionRow(old)
+                        }
+                    }
+                }
+            }
+            Text("Eine Handlung ist noch keine Bewertung. Es wird keine Verantwortung aus Parteizugehörigkeit abgeleitet.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    private func actionRow(_ revision: ActionRevision) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text("\(revision.title.value) · Revision \(revision.metadata.number)").font(.headline)
+            LabeledContent("Typ", value: revision.type.displayName)
+            LabeledContent("Verfahrensstatus", value: revision.proceduralState.value)
+            LabeledContent("Beschreibung", value: revision.description.content.knownValue?.value ?? "Unbekannt")
+            LabeledContent("Bereich", value: revision.scope.content.knownValue?.value ?? "Unbekannt")
+            LabeledContent("Ereignisdatum", value: actionDate(revision))
+            Text("Beschreibung: \(revision.description.verification.displayName) · Datum: \(revision.eventDate.verification.displayName) · Bereich: \(revision.scope.verification.displayName)")
+                .font(.caption).foregroundStyle(.secondary)
+            if let level = revision.institutionalLevel { LabeledContent("Institutionelle Ebene", value: level.value) }
+            if let identifier = revision.objectIdentifier { LabeledContent("Objektkennung", value: identifier.value) }
+            ForEach(revision.excerptIDs, id: \.self) { id in
+                if let excerpt = graph.find(id) {
+                    Text("\(excerptSource(excerpt)) · \(excerpt.locator.value) · \(excerpt.state.displayName) — \(excerpt.text.value)").font(.caption)
+                }
+            }
+        }.padding(.vertical, 5)
+    }
+
+    private func excerptSource(_ excerpt: SourceExcerpt) -> String {
+        guard let version = graph.find(excerpt.sourceVersionID), let source = graph.find(version.sourceID) else { return "Quelle fehlt" }
+        return version.title?.value ?? source.canonicalURL?.absoluteString ?? source.documentIdentifier?.value ?? "Gespeicherte Quelle"
+    }
+
+    private func actionDate(_ revision: ActionRevision) -> String {
+        guard let start = revision.eventDate.content.knownValue?.content.knownValue?.start else { return "Unbekannt" }
+        return start.formatted(date: .abbreviated, time: .omitted)
+    }
+
     private var evidenceSection: some View {
         section("Evidenz", systemImage: "text.magnifyingglass") {
+            Button("Evidenz hinzufügen") { sheet = .newEvidence }
+                .disabled(workspace.confirmedCriteria.isEmpty || workspace.verifiedExcerpts.isEmpty)
+            if workspace.confirmedCriteria.isEmpty {
+                Text("Bestätige zunächst ein aktives Kriterium.").font(.caption).foregroundStyle(.secondary)
+            }
+            if workspace.verifiedExcerpts.isEmpty {
+                Text("Prüfe zunächst eine Fundstelle.").font(.caption).foregroundStyle(.secondary)
+            }
             if graph.evidenceLinks.isEmpty {
                 Text("Noch keine Evidenzverknüpfungen.").foregroundStyle(.secondary)
             }
@@ -256,6 +319,16 @@ struct CaseDetailView: View {
             Text("\(link.relationship.displayName) · \(link.directness.displayName) · \(link.status.displayName)")
                 .font(.caption).foregroundStyle(.secondary)
             Text(link.rationale.value)
+            if let id = link.actionRevisionID, let action = graph.find(id) {
+                Text("Handlung: \(action.title.value) · Revision \(action.metadata.number)").font(.caption)
+            }
+            if link.status == .draft {
+                Button("Evidenz zur Prüfung vorlegen") { workspace.requestEvidenceReview(link.id) }
+                    .disabled(!workspace.canTransitionEvidence(link, to: .needsReview))
+            } else if link.status == .needsReview {
+                Button("Evidenz prüfen") { workspace.verifyEvidence(link.id) }
+                    .disabled(!workspace.canTransitionEvidence(link, to: .verified))
+            }
             ForEach(link.excerptIDs, id: \.self) { id in
                 if let excerpt = graph.find(id) {
                     Text("Fundstelle: \(excerpt.locator.value) — \(excerpt.text.value)").font(.caption)

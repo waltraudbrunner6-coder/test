@@ -11,7 +11,13 @@ public enum WorkspaceErrorMessage {
             case .invalidEnum(let type, let value): return "Ein gespeicherter Status ist ungültig (\(type): \(value))."
             case .wrongIDType(let expected, _, _): return "Eine gespeicherte Verknüpfung erwartet den Typ \(expected)."
             case .identityMismatch(let kind, _): return "Der gespeicherte Datensatz \(kind) passt nicht zu seiner ID."
-            case .missingEntity(let kind, _): return "Ein benötigter Datensatz fehlt: \(kind)."
+            case .missingEntity(let kind, _):
+                switch kind {
+                case "CriterionRevision": return "Das Kriterium fehlt oder gehört nicht zu den aktiven Kriterien dieses Falls."
+                case "ActionRevision": return "Die Handlungsrevision fehlt oder gehört nicht zu diesem Fall."
+                case "SourceExcerpt": return "Die ausgewählte Fundstelle ist in diesem Fall nicht vorhanden."
+                default: return "Ein benötigter Datensatz fehlt: \(kind)."
+                }
             case .duplicateID(let kind, _): return "Die ID eines Datensatzes ist doppelt vorhanden: \(kind)."
             case .corruptPayload(_): return "Ein gespeicherter Datensatz ist beschädigt und wurde nicht verändert."
             case .invalidValue(let detail): return "Ein gespeicherter Wert ist ungültig: \(detail)"
@@ -70,7 +76,7 @@ public enum WorkspaceErrorMessage {
         case .missingNotVerifiableReason: return "Für „nicht überprüfbar“ fehlt ein strukturierter Grund."
         case .lowConfidenceNegativeJudgment: return "Eine negative Schlussbewertung braucht höhere Evidenzsicherheit."
         case .unreviewedCriterionEvaluation: return "Die Kriterienbewertung ist noch nicht menschlich geprüft."
-        case .invalidDateRole(_, _): return "Das Datum hat eine unpassende fachliche Rolle."
+        case .invalidDateRole(_, _): return "Das Datum hat eine unpassende fachliche Rolle. Evidenz benötigt einen Ereignis- oder Gültigkeitsbezug, kein Publikationsdatum."
         case .missingCutoff: return "Für die Bewertung fehlt ein Stichtag."
         case .eventAfterCutoff: return "Das Ereignis liegt nach dem Bewertungsstichtag."
         case .deadlineNotPassed: return "Die Frist ist noch nicht abgelaufen."

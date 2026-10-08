@@ -23,6 +23,11 @@ Jede Operation verwendet einen frischen ModelContext; Autosave ist deaktiviert. 
 Konkrete Fachoperationen:
 
 - `addVerifiedEvidence`: geprüften Link, DomainChanges-Review-Markierungen und AuditEntry-Datensätze gemeinsam speichern.
+- `addAction`: erste ungeprüfte ActionRevision und stabile Handlungsidentität, aktuelle Case-Referenz, menschlichen AuditEntry und gegebenenfalls lokale ReviewerIdentity gemeinsam speichern.
+- `verifyAction`: ausgewählte vorhandene geprüfte Fundstellen kontrollieren, die drei asserted fields (Beschreibung, Ereignisdatum, Bereich) mit HumanReview bestätigen und eine neue immutable ActionRevision mit aktualisierten Arbeitskopf-IDs sowie AuditEntry speichern. Die alte Revision bleibt unverändert; Beteiligungen werden nicht abgeleitet oder kopiert.
+- `addEvidenceDraft`: aktives bestätigtes Kriterium desselben Cases, mindestens eine vorhandene geprüfte Fundstelle sowie optional eine konkrete Handlungsrevision desselben Cases prüfen; Draft ohne HumanReview mit AuditEntry atomar speichern.
+- `requestEvidenceReview`: den vom Core erlaubten Übergang `draft → needsReview` mit AuditEntry speichern; keine Verifikation.
+- `verifyEvidence`: bestehenden Link über `DomainChanges.transition` und HumanReview von `needsReview` zu `verified` überführen. Derselbe interne Transaktionspfad wie `addVerifiedEvidence` verarbeitet DomainChanges-ReviewRequests, Evaluation-Status, abhängige Skripte und Audits in genau einem Save. Es entsteht keine zweite Review-/Evidence-Speicherlogik und kein neuer Bewertungsinhalt.
 - `reviseCriterion`: neue Kriterienrevision mit neuer ID anlegen, optional menschlich bestätigen, aktuelle IDs aktualisieren und Review-Markierungen sowie Audits gemeinsam speichern.
 - Bereits freigegebene abhängige Skripte erhalten dabei gemäß bestehendem Core den erlaubten operativen Status `superseded`: Text, Version, ursprüngliche Freigabe und Statements bleiben unverändert; der Statuswechsel wird ebenfalls auditiert. Der Core erlaubt kein aktuell freigegebenes Skript zu einer reviewbedürftigen Bewertung.
 
@@ -40,11 +45,11 @@ SwiftData-Schema-Version: **1.0.0**, Payload-Format: **1**. `PersistenceMigratio
 
 ## Tests und Prüfstand
 
-42 neue XCTest-Testmethoden: Roundtrips aller 23 Typen, frische Contexts, getrennte Quellenfassungen/Revisionen, konkrete Snapshot-IDs, ReviewRequired mit Audits, neue freigegebene Ersatzbewertung, konservatives Löschen, Rollback, beschädigte Beziehungen/Payloads, doppelte IDs, falsche ID-Typen und Statuswerte. Ausschließlich synthetische Inhalte. Standardmäßig In-Memory; ein separater Wiederöffnungstest verwendet ausschließlich einen eigenen temporären Ordner und entfernt ihn anschließend.
+Die 42 bisherigen Persistence-Tests bleiben unverändert. Hinzu kommen 15 Tests für manuelle Handlungen/Evidenz: erste Revision und ungeprüfte Felder, neue Prüfungsrevision bei erhaltener Historie, Rollback einschließlich Reviewer/Audit, exakte Draft-Referenzen, fehlende oder ungeprüfte Fundstellen, fehlendes/fremdes Kriterium, Draftkriterium, ungültige Datumsrolle, fehlende Handlungsrevision, doppelte IDs, verbotener Statussprung, menschlich geprüfte Evidenz nach echter Wiederöffnung eines temporären Stores und unveränderte historische Bewertungen bei ReviewRequired. Ausschließlich synthetische Inhalte; keine Benutzerstores. Zusammen mit 90 Core- und 13 AppModel-Tests werden 160 Tests erwartet.
 
-Die 90 bisherigen Domain-Tests wurden nicht verändert. Deren Ausgangsstand `b114ee40015e28c17e26cd1555ba555f63100e6b` ist laut bestätigtem Nutzerbericht auf macOS-15 mit Apple Swift 6.1.2 erfolgreich (90 Tests, 0 Fehler). Dies ist kein Testnachweis für die neue Persistenzschicht.
+Der Ausgangsstand `9bd58e74e21cd4237bc75cd006efda06d028d3d2` ist laut externer Nutzerprüfung auf macOS mit Apple Swift 6.1.2 erfolgreich (139 Tests, 0 Fehler, nativer arm64-App-Build erfolgreich). Für Phase 3.1 fehlen lokal weiterhin Swift und Xcode: `swift --version`, `swift test` und der native App-Build enden mit Exit 127. Der unveränderte macOS-15-Workflow führt zuerst `swift test`, danach den nativen App-Build aus. Ein grüner Lauf dieser Änderungen ist noch nicht nachgewiesen; GitHub-Actions-Lesezugriff war bislang mit `Forbidden` blockiert. Statische Prüfung und `git diff --check` ersetzen keine macOS-Ausführung.
 
-Lokal fehlen `swift` und `swiftc`; `swift --version` und `swift test` enden mit Exit 127. Die bestehende macOS-15-CI führt nun beide Targets mit `swift test` aus. Ein erfolgreicher neuer Compile-/Testlauf ist derzeit **nicht verifiziert**; GitHub-CLI-Authentifizierung und Actions-Lesezugriff sind in dieser Umgebung fehlerhaft. Statische Klammer-/Initialisiererprüfung und `git diff --check` ersetzen die macOS-Ausführung nicht.
+Handlungen sind noch keine Bewertung; EvidenceRelationship ist keine Kategorie. Der Store verifiziert ausschließlich nach expliziter menschlicher Aktion und Core-Prüfung. Attribution wird nicht aus Parteizugehörigkeit abgeleitet. Keine automatische Evaluation, Snapshot-Erstellung oder Methodikversion; Bewertung folgt in Phase 3.2. Schema-Version und Payload-Format bleiben unverändert, da nur bestehende Domain-/DTO-Typen verwendet werden.
 
 ## Grenzen
 
@@ -52,4 +57,4 @@ Lokal fehlen `swift` und `swiftc`; `swift --version` und `swift test` enden mit 
 - Vollständiges Laden/Validieren des Fallgraphen und Tabellenabfragen statt Indizes für jedes fachliche Feld: ausreichend für den einzelnen MVP-Fall, später bei Bedarf optimieren.
 - Identitäts- und Auditdaten belegen strukturell menschliche Freigabe, nicht die tatsächliche Person vor dem Rechner oder den Wahrheitsgehalt eines Belegs. Journalistische Prüfungen bleiben beim Menschen.
 - Der Store übernimmt bereits definierte Domain-Regeln und ergänzt Speicherintegrität; er entscheidet keine Kategorien und erzeugt keine neuen politischen Inhalte.
-- Keine komplexen Migrationen, Archivierungs-API, Backup- oder Datenschutzlöschstrategie. Keine UI, SwiftUI, AppKit, Netzwerk-/KI-Integration, Recherche, Dateiimport, Export, Video, Voiceover, TTS oder Cloud-Synchronisierung. CloudKit ist explizit deaktiviert.
+- Keine komplexen Migrationen, Archivierungs-API, Backup- oder Datenschutzlöschstrategie. Im Persistence-Modul keine UI, SwiftUI, AppKit, Netzwerk-/KI-Integration, Recherche, Dateiimport, Export, Video, Voiceover, TTS oder Cloud-Synchronisierung. CloudKit ist explizit deaktiviert.

@@ -175,3 +175,279 @@ private func parseOptionalDate(_ value: String) -> Date? {
 #Preview("New case") {
     NewCaseSheet().environmentObject(CaseWorkspaceModel(startupError: "Preview only"))
 }
+
+struct NewActionSheet: View {
+    @EnvironmentObject private var workspace: CaseWorkspaceModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var typeIndex = 0
+    @State private var title = ""
+    @State private var description = ""
+    @State private var eventDate = ""
+    @State private var proceduralState = ""
+    @State private var scope = ""
+    @State private var institution = ""
+    @State private var identifier = ""
+    @State private var excerpts: Set<EntityID<SourceExcerpt>> = []
+    @State private var dateError: String?
+    private let types: [ActionType] = [.vote, .initiative, .resolution, .implementation, .development, .other]
+
+    var body: some View {
+        ScrollView {
+            Form {
+                fields
+                if let graph = workspace.selectedContext {
+                    ExcerptSelection(graph: graph, options: graph.excerpts, selected: $excerpts)
+                }
+                Text("Beschreibung, Ereignisdatum und Bereich beginnen ungeprüft. Keine automatische Akteurszurechnung.")
+                    .font(.caption).foregroundStyle(.secondary)
+                if let dateError { Text(dateError).foregroundStyle(.red) }
+                WorkspaceFormError()
+                HStack {
+                    Button("Abbrechen") { dismiss() }
+                    Spacer()
+                    Button("Handlung speichern", action: save).keyboardShortcut(.defaultAction)
+                }
+            }.padding(20)
+        }.frame(width: 600, height: 650)
+    }
+
+    private var fields: some View {
+        Group {
+            Picker("Typ", selection: $typeIndex) {
+                ForEach(types.indices, id: \.self) { index in Text(types[index].displayName).tag(index) }
+            }
+            TextField("Titel", text: $title)
+            TextField("Beschreibung", text: $description, axis: .vertical).lineLimit(2...5)
+            TextField("Ereignisdatum (JJJJ-MM-TT)", text: $eventDate)
+            TextField("Verfahrens-/Umsetzungsstatus", text: $proceduralState)
+            TextField("Geltungs-/Zielbereich", text: $scope)
+            TextField("Institutionelle Ebene (optional)", text: $institution)
+            TextField("Objektkennung (optional)", text: $identifier)
+        }
+    }
+
+    private func save() {
+        guard let date = parseOptionalDate(eventDate), let dated = try? manualDay(date, role: .event) else {
+            dateError = "Gib ein Ereignisdatum im Format JJJJ-MM-TT ein."
+            return
+        }
+        dateError = nil
+        if workspace.addAction(type: types[typeIndex], title: title, description: description, eventDate: dated,
+            proceduralState: proceduralState, scope: scope, institutionalLevel: institution,
+            objectIdentifier: identifier, excerptIDs: orderedExcerpts(excerpts, in: workspace.selectedContext)) != nil { dismiss() }
+    }
+}
+
+struct ActionReviewSheet: View {
+    @EnvironmentObject private var workspace: CaseWorkspaceModel
+    @Environment(\.dismiss) private var dismiss
+    let revisionID: EntityID<ActionRevision>
+    @State private var excerpts: Set<EntityID<SourceExcerpt>> = []
+
+    var body: some View {
+        ScrollView {
+            Form {
+                if let graph = workspace.selectedContext, let revision = graph.find(revisionID) {
+                    Text(revision.title.value).font(.headline)
+                    Text(revision.description.content.knownValue?.value ?? "Unbekannt")
+                    Text("Bereich: \(revision.scope.content.knownValue?.value ?? "Unbekannt")")
+                    if let date = revision.eventDate.content.knownValue?.content.knownValue?.start {
+                        Text("Ereignisdatum: \(date.formatted(date: .abbreviated, time: .omitted))")
+                    }
+                    Text("Bestätige anhand der ausgewählten Fundstellen Beschreibung, Ereignisdatum und Geltungsbereich. Die alte Revision bleibt erhalten.")
+                    ExcerptSelection(graph: graph, options: workspace.verifiedExcerpts, selected: $excerpts)
+                    WorkspaceFormError()
+                    HStack {
+                        Button("Abbrechen") { dismiss() }
+                        Spacer()
+                        Button("Handlung menschlich prüfen") {
+                            if workspace.verifyAction(revisionID, excerptIDs: orderedExcerpts(excerpts, in: graph)) { dismiss() }
+                        }.disabled(excerpts.isEmpty)
+                    }
+                } else {
+                    Text("Die Handlungsrevision ist nicht mehr verfügbar.")
+                    Button("Schließen") { dismiss() }
+                }
+            }.padding(20)
+        }.frame(width: 600, height: 500)
+    }
+}
+
+struct NewEvidenceSheet: View {
+    @EnvironmentObject private var workspace: CaseWorkspaceModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var criterionID: EntityID<CriterionRevision>?
+    @State private var actionID: EntityID<ActionRevision>?
+    @State private var excerpts: Set<EntityID<SourceExcerpt>> = []
+    @State private var relationshipIndex = 0
+    @State private var directnessIndex = 0
+    @State private var temporalIndex = 0
+    @State private var rationale = ""
+    @State private var date = ""
+    @State private var endDate = ""
+    @State private var dateError: String?
+    private let relationships: [EvidenceRelationship] = [.supports, .contradicts, .contextualizes]
+    private let directness: [EvidenceDirectness] = [.direct, .indirect]
+
+    var body: some View {
+        ScrollView {
+            Form {
+                criteriaAndAction
+                classification
+                TextField("Fachliche Begründung", text: $rationale, axis: .vertical).lineLimit(2...5)
+                temporalFields
+                if let graph = workspace.selectedContext {
+                    ExcerptSelection(graph: graph, options: workspace.verifiedExcerpts, selected: $excerpts)
+                }
+                Text("Die Verknüpfung beginnt als Draft. Beziehung und Direktheit sind keine Bewertungskategorie. Die menschliche Prüfung erfolgt anschließend separat.")
+                    .font(.caption).foregroundStyle(.secondary)
+                if let dateError { Text(dateError).foregroundStyle(.red) }
+                WorkspaceFormError()
+                HStack {
+                    Button("Abbrechen") { dismiss() }
+                    Spacer()
+                    Button("Evidenz-Draft speichern", action: save)
+                        .disabled(criterionID == nil || excerpts.isEmpty).keyboardShortcut(.defaultAction)
+                }
+            }.padding(20)
+        }.frame(width: 620, height: 660)
+    }
+
+    private var criteriaAndAction: some View {
+        Group {
+            Picker("Bestätigtes Kriterium", selection: $criterionID) {
+                Text("Bitte auswählen").tag(nil as EntityID<CriterionRevision>?)
+                ForEach(workspace.confirmedCriteria, id: \.id) { criterion in
+                    Text(criterion.goal.value).tag(Optional(criterion.id))
+                }
+            }
+            Picker("Handlungsrevision (optional)", selection: $actionID) {
+                Text("Keine Handlung").tag(nil as EntityID<ActionRevision>?)
+                if let graph = workspace.selectedContext {
+                    ForEach(graph.actionRevisions, id: \.id) { action in
+                        Text("\(action.title.value) · Revision \(action.metadata.number)").tag(Optional(action.id))
+                    }
+                }
+            }
+        }
+    }
+
+    private var classification: some View {
+        Group {
+            Picker("Beziehung", selection: $relationshipIndex) {
+                Text("stützt").tag(0)
+                Text("widerspricht").tag(1)
+                Text("kontextualisiert").tag(2)
+            }
+            Picker("Direktheit", selection: $directnessIndex) {
+                Text("direkt").tag(0)
+                Text("indirekt").tag(1)
+            }
+        }
+    }
+
+    private var temporalFields: some View {
+        Group {
+            Picker("Zeitlicher Bezug", selection: $temporalIndex) {
+                Text("Ereignisdatum").tag(0)
+                Text("Gültigkeitszeitraum").tag(1)
+            }
+            TextField(temporalIndex == 0 ? "Ereignisdatum (JJJJ-MM-TT)" : "Beginn (JJJJ-MM-TT)", text: $date)
+            if temporalIndex == 1 { TextField("Ende, einschließlich (JJJJ-MM-TT)", text: $endDate) }
+            Text("Nicht das Publikationsdatum der Quelle verwenden.").font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    private func save() {
+        guard let criterionID, let start = parseOptionalDate(date) else {
+            dateError = "Wähle ein Kriterium und gib ein gültiges Bezugsdatum ein."
+            return
+        }
+        do {
+            let temporal: DatedValue
+            if temporalIndex == 0 {
+                temporal = try manualDay(start, role: .event)
+            } else {
+                guard let end = parseOptionalDate(endDate), end >= start else {
+                    dateError = "Gib ein gültiges Ende ab dem Beginn des Zeitraums ein."
+                    return
+                }
+                let interval = try PoliticalFactCheckCore.DateInterval(start: start, end: end.addingTimeInterval(86_400))
+                temporal = try DatedValue(role: .validity, precision: .interval, content: .known(interval), timeZoneIdentifier: "UTC")
+            }
+            dateError = nil
+            if workspace.addEvidenceDraft(criterionRevisionID: criterionID,
+                excerptIDs: orderedExcerpts(excerpts, in: workspace.selectedContext), actionRevisionID: actionID,
+                relationship: relationships[relationshipIndex], directness: directness[directnessIndex],
+                rationale: rationale, temporalReference: temporal) != nil { dismiss() }
+        } catch { dateError = "Das Datum oder der Zeitraum ist ungültig." }
+    }
+}
+
+private struct ExcerptSelection: View {
+    let graph: DomainContext
+    let options: [SourceExcerpt]
+    @Binding var selected: Set<EntityID<SourceExcerpt>>
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Vorhandene Fundstellen auswählen").font(.headline)
+            if options.isEmpty { Text("Keine geeigneten Fundstellen vorhanden.").foregroundStyle(.secondary) }
+            ForEach(options, id: \.id) { excerpt in
+                Toggle(isOn: Binding(get: { selected.contains(excerpt.id) }, set: { checked in
+                    if checked { selected.insert(excerpt.id) } else { selected.remove(excerpt.id) }
+                })) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(sourceLabel(excerpt)).font(.caption)
+                        Text("\(excerpt.locator.value) · \(status(excerpt))").font(.caption)
+                        Text(excerpt.text.value).textSelection(.enabled)
+                    }
+                }.toggleStyle(.checkbox)
+            }
+        }
+    }
+
+    private func sourceLabel(_ excerpt: SourceExcerpt) -> String {
+        guard let version = graph.find(excerpt.sourceVersionID), let source = graph.find(version.sourceID) else { return "Quelle nicht verfügbar" }
+        return version.title?.value ?? source.canonicalURL?.absoluteString ?? source.documentIdentifier?.value ?? "Gespeicherte Quelle"
+    }
+
+    private func status(_ excerpt: SourceExcerpt) -> String {
+        switch excerpt.state {
+        case .unverified: "ungeprüft"
+        case .verified: "geprüft"
+        case .rejected: "abgelehnt"
+        case .superseded: "überholt"
+        }
+    }
+}
+
+private struct WorkspaceFormError: View {
+    @EnvironmentObject private var workspace: CaseWorkspaceModel
+    var body: some View {
+        if let message = workspace.errorMessage { Text(message).foregroundStyle(.red) }
+    }
+}
+
+private func manualDay(_ date: Date, role: DateRole) throws -> DatedValue {
+    try DatedValue(role: role, precision: .day,
+        content: .known(PoliticalFactCheckCore.DateInterval(start: date, end: date.addingTimeInterval(86_400))),
+        timeZoneIdentifier: "UTC")
+}
+
+private func orderedExcerpts(_ selected: Set<EntityID<SourceExcerpt>>, in graph: DomainContext?) -> [EntityID<SourceExcerpt>] {
+    graph?.excerpts.filter { selected.contains($0.id) }.map(\.id) ?? []
+}
+
+extension ActionType {
+    var displayName: String {
+        switch self {
+        case .vote: "Abstimmung"
+        case .initiative: "Initiative"
+        case .resolution: "Beschluss"
+        case .implementation: "Umsetzung"
+        case .development: "Entwicklung"
+        case .other: "Sonstiges"
+        }
+    }
+}

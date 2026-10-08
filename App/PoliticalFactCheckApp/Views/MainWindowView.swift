@@ -69,15 +69,32 @@ struct MainWindowView: View {
             if let selectedCase = workspace.selectedCase {
                 NewSourceSheet(caseID: selectedCase.id)
             }
+        case .newAction:
+            NewActionSheet()
+        case .newEvidence:
+            NewEvidenceSheet()
+        case .reviewAction(let id):
+            ActionReviewSheet(revisionID: id)
         case .reviewer:
             ReviewerSettingsSheet()
         }
     }
 }
 
-enum EditorSheet: String, Identifiable {
-    case newCase, newCriterion, newSource, reviewer
-    var id: String { rawValue }
+enum EditorSheet: Identifiable {
+    case newCase, newCriterion, newSource, reviewer, newAction, newEvidence
+    case reviewAction(EntityID<ActionRevision>)
+    var id: String {
+        switch self {
+        case .newCase: "newCase"
+        case .newCriterion: "newCriterion"
+        case .newSource: "newSource"
+        case .reviewer: "reviewer"
+        case .newAction: "newAction"
+        case .newEvidence: "newEvidence"
+        case .reviewAction(let id): "reviewAction-\(id.rawValue.uuidString)"
+        }
+    }
 }
 
 struct EmptyCaseView: View {

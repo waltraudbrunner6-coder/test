@@ -11,31 +11,65 @@ extension LocalCaseStore {
             guard let graph = try readCase(caseID.rawValue, in: context) else {
                 throw PersistenceError.missingEntity(kind: "Case", id: caseID.rawValue)
             }
-            guard graph.find(reviewer) != nil else {
-                throw PersistenceError.missingEntity(kind: "ReviewerIdentity", id: reviewer.rawValue)
-            }
-            guard graph.find(link.id) == nil else { throw PersistenceError.duplicateID(kind: "EvidenceLink", id: link.id.rawValue) }
-            guard let criterion = graph.find(link.criterionRevisionID),
-                  graph.find(criterion.criterionID)?.promiseID == graph.cases[0].promiseID else {
-                throw PersistenceError.missingEntity(kind: "CriterionRevision", id: link.criterionRevisionID.rawValue)
-            }
-            let change = try domainChange { try DomainChanges.addingEvidence(link, reason: reason, in: graph) }
-            var dto = CaseGraphDTO(graph)
-            dto.evidenceLinks.append(EvidenceLinkDTO(change.link))
-            for evaluation in change.evaluationUpdates {
-                if let index = dto.caseEvaluations.firstIndex(where: { $0.id.value == evaluation.id.rawValue }) {
-                    dto.caseEvaluations[index] = CaseEvaluationDTO(evaluation)
-                }
-            }
-            dto.cases[0].modifiedAt = date
-            try dto.auditEntries.append(AuditEntryDTO(AuditEntry(caseID: caseID,
-                target: ObjectReference(kind: .evidenceLink, id: link.id), operation: NonEmptyText("addVerifiedEvidence"),
-                author: .human(reviewer), humanRequesterID: reviewer, occurredAt: date, reason: reason)))
-            try supersedeDependentScripts(change.evaluationUpdates, in: graph, reason: reason,
-                reviewer: reviewer, at: date, to: &dto)
-            try appendReviewAudits(change.reviewRequests, caseID: caseID, reviewer: reviewer, at: date, to: &dto)
-            try writeCase(domainChange { try dto.domain() }, in: context)
+            try persistVerifiedEvidence(caseID: caseID, link: link, reason: reason,
+                reviewer: reviewer, at: date, graph: graph, context: context)
         }
+    }
+
+    /// The manual review path promotes an existing needsReview link through the same impact transaction.
+    public func verifyEvidence(caseID: EntityID<Case>, linkID: EntityID<EvidenceLink>,
+                               reviewer: ReviewerIdentity, at date: Date, reason: NonEmptyText) throws {
+        try transaction("verifyEvidence") { context in
+            let graph = try manualGraph(caseID: caseID, reviewer: reviewer, in: context)
+            guard let old = graph.find(linkID) else {
+                throw PersistenceError.missingEntity(kind: "EvidenceLink", id: linkID.rawValue)
+            }
+            try validateManualEvidence(old, in: graph)
+            let verified = try domainChange {
+                try DomainChanges.transition(old, to: .verified,
+                    review: HumanReview(reviewerID: reviewer.id, reviewedAt: date), in: graph)
+            }
+            try persistVerifiedEvidence(caseID: caseID, link: verified, reason: reason,
+                reviewer: reviewer.id, at: date, graph: graph, context: context)
+        }
+    }
+
+    private func persistVerifiedEvidence(caseID: EntityID<Case>, link: EvidenceLink,
+                                         reason: NonEmptyText, reviewer: EntityID<ReviewerIdentity>,
+                                         at date: Date, graph: DomainContext, context: ModelContext) throws {
+        guard graph.find(reviewer) != nil else {
+            throw PersistenceError.missingEntity(kind: "ReviewerIdentity", id: reviewer.rawValue)
+        }
+        if let existing = graph.find(link.id) {
+            guard existing.status == .needsReview else {
+                throw PersistenceError.duplicateID(kind: "EvidenceLink", id: link.id.rawValue)
+            }
+            try domainChange { try RevisionRules.validateReplacement(existing, with: link) }
+        }
+        guard let criterion = graph.find(link.criterionRevisionID),
+              graph.find(criterion.criterionID)?.promiseID == graph.cases[0].promiseID else {
+            throw PersistenceError.missingEntity(kind: "CriterionRevision", id: link.criterionRevisionID.rawValue)
+        }
+        let change = try domainChange { try DomainChanges.addingEvidence(link, reason: reason, in: graph) }
+        var dto = CaseGraphDTO(graph)
+        if let index = dto.evidenceLinks.firstIndex(where: { $0.id.value == link.id.rawValue }) {
+            dto.evidenceLinks[index] = EvidenceLinkDTO(change.link)
+        } else {
+            dto.evidenceLinks.append(EvidenceLinkDTO(change.link))
+        }
+        for evaluation in change.evaluationUpdates {
+            if let index = dto.caseEvaluations.firstIndex(where: { $0.id.value == evaluation.id.rawValue }) {
+                dto.caseEvaluations[index] = CaseEvaluationDTO(evaluation)
+            }
+        }
+        dto.cases[0].modifiedAt = date
+        try dto.auditEntries.append(AuditEntryDTO(AuditEntry(caseID: caseID,
+            target: ObjectReference(kind: .evidenceLink, id: link.id), operation: NonEmptyText("addVerifiedEvidence"),
+            author: .human(reviewer), humanRequesterID: reviewer, occurredAt: date, reason: reason)))
+        try supersedeDependentScripts(change.evaluationUpdates, in: graph, reason: reason,
+            reviewer: reviewer, at: date, to: &dto)
+        try appendReviewAudits(change.reviewRequests, caseID: caseID, reviewer: reviewer, at: date, to: &dto)
+        try writeCase(domainChange { try dto.domain() }, in: context)
     }
 
     public func reviseCriterion(caseID: EntityID<Case>, revisionID: EntityID<CriterionRevision>,

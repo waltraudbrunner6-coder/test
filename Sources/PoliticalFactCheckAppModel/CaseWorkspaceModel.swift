@@ -383,6 +383,101 @@ public final class CaseWorkspaceModel: ObservableObject {
         } catch { present(error); return false }
     }
 
+    public var confirmedCriteria: [CriterionRevision] {
+        guard let graph = selectedContext, let politicalCase = selectedCase else { return [] }
+        return politicalCase.activeCriterionRevisionIDs.compactMap { graph.find($0) }.filter { $0.state == .confirmed }
+    }
+
+    public var verifiedExcerpts: [SourceExcerpt] {
+        guard let graph = selectedContext else { return [] }
+        return graph.excerpts.filter { $0.state == .verified && DomainValidator.validate($0, in: graph).isValid }
+    }
+
+    @discardableResult
+    public func addAction(type: ActionType, title: String, description: String, eventDate: DatedValue,
+                          proceduralState: String, scope: String, institutionalLevel: String = "",
+                          objectIdentifier: String = "", excerptIDs: [EntityID<SourceExcerpt>] = []) -> EntityID<ActionRevision>? {
+        do {
+            guard let store, let caseID = selectedCaseID else { throw WorkspaceInputError.caseUnavailable }
+            let reviewer = try currentReviewer()
+            let now = Date()
+            let actionID = EntityID<ActionOrDevelopment>()
+            let revision = try ActionRevision(actionID: actionID, type: type, title: NonEmptyText(title),
+                description: asserted(.known(NonEmptyText(description))), eventDate: asserted(.known(eventDate)),
+                institutionalLevel: optionalText(institutionalLevel), objectIdentifier: optionalText(objectIdentifier),
+                proceduralState: NonEmptyText(proceduralState), scope: asserted(.known(NonEmptyText(scope))),
+                excerptIDs: excerptIDs, metadata: RevisionMetadata(number: 1,
+                    reason: NonEmptyText("Handlung manuell als ungeprüften Entwurf erfasst"), author: .human(reviewer.id), createdAt: now))
+            let action = ActionOrDevelopment(id: actionID, caseID: caseID, currentRevisionID: revision.id, createdAt: now)
+            try store.addAction(caseID: caseID, action: action, revision: revision, reviewer: reviewer, at: now)
+            reload(selecting: caseID)
+            return revision.id
+        } catch { present(error); return nil }
+    }
+
+    @discardableResult
+    public func verifyAction(_ revisionID: EntityID<ActionRevision>, excerptIDs: [EntityID<SourceExcerpt>]) -> Bool {
+        do {
+            guard let store, let caseID = selectedCaseID else { throw WorkspaceInputError.caseUnavailable }
+            try store.verifyAction(caseID: caseID, revisionID: revisionID, excerptIDs: excerptIDs,
+                reviewer: currentReviewer(), at: Date())
+            reload(selecting: caseID)
+            return true
+        } catch { present(error); return false }
+    }
+
+    @discardableResult
+    public func addEvidenceDraft(criterionRevisionID: EntityID<CriterionRevision>, excerptIDs: [EntityID<SourceExcerpt>],
+                                 actionRevisionID: EntityID<ActionRevision>? = nil, relationship: EvidenceRelationship,
+                                 directness: EvidenceDirectness, rationale: String,
+                                 temporalReference: DatedValue) -> EntityID<EvidenceLink>? {
+        do {
+            guard let store, let caseID = selectedCaseID else { throw WorkspaceInputError.caseUnavailable }
+            let reviewer = try currentReviewer()
+            let now = Date()
+            let link = try EvidenceLink(criterionRevisionID: criterionRevisionID, excerptIDs: excerptIDs,
+                actionRevisionID: actionRevisionID, relationship: relationship, directness: directness,
+                rationale: NonEmptyText(rationale), temporalReference: temporalReference,
+                metadata: RevisionMetadata(number: 1, reason: NonEmptyText("Evidenz manuell als Draft erfasst"),
+                    author: .human(reviewer.id), createdAt: now))
+            try store.addEvidenceDraft(caseID: caseID, link: link, reviewer: reviewer, at: now)
+            reload(selecting: caseID)
+            return link.id
+        } catch { present(error); return nil }
+    }
+
+    @discardableResult
+    public func requestEvidenceReview(_ linkID: EntityID<EvidenceLink>) -> Bool {
+        do {
+            guard let store, let caseID = selectedCaseID else { throw WorkspaceInputError.caseUnavailable }
+            try store.requestEvidenceReview(caseID: caseID, linkID: linkID, reviewer: currentReviewer(), at: Date())
+            reload(selecting: caseID)
+            return true
+        } catch { present(error); return false }
+    }
+
+    @discardableResult
+    public func verifyEvidence(_ linkID: EntityID<EvidenceLink>) -> Bool {
+        do {
+            guard let store, let caseID = selectedCaseID else { throw WorkspaceInputError.caseUnavailable }
+            try store.verifyEvidence(caseID: caseID, linkID: linkID, reviewer: currentReviewer(), at: Date(),
+                reason: NonEmptyText("Evidenz und Zuordnung anhand der ausgewählten Fundstellen menschlich geprüft"))
+            reload(selecting: caseID)
+            return true
+        } catch { present(error); return false }
+    }
+
+    /// Uses the Core transition and validation; this is a UI capability, not a second state machine.
+    public func canTransitionEvidence(_ link: EvidenceLink, to status: EvidenceLinkStatus) -> Bool {
+        guard let graph = selectedContext, let reviewer = graph.reviewers.first,
+              confirmedCriteria.contains(where: { $0.id == link.criterionRevisionID }),
+              !link.excerptIDs.isEmpty,
+              link.excerptIDs.allSatisfy({ id in verifiedExcerpts.contains { $0.id == id } }) else { return false }
+        return (try? DomainChanges.transition(link, to: status,
+            review: status == .verified ? HumanReview(reviewerID: reviewer.id, reviewedAt: Date()) : nil,
+            in: graph)) != nil
+    }
+
     public func dismissError() { errorMessage = nil }
 
     private func reload(selecting id: EntityID<PoliticalFactCheckCore.Case>) {
