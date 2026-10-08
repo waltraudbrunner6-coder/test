@@ -429,6 +429,17 @@ private extension EvidenceDirectness {
         }
     }
 }
+private extension EvidenceLinkStatus {
+    var displayName: String {
+        switch self {
+        case .draft: return "Draft"
+        case .needsReview: return "Prüfung erforderlich"
+        case .verified: return "geprüft"
+        case .rejected: return "abgelehnt"
+        case .superseded: return "überholt"
+        }
+    }
+}
 
 #Preview("Case detail — synthetic") {
     PreviewCaseDetail()
