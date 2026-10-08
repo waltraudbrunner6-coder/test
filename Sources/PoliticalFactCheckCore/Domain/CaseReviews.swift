@@ -31,11 +31,14 @@ public enum CaseReviews {
         let relevantLinks = context.evidenceLinks.filter {
             $0.status == .verified && politicalCase.activeCriterionRevisionIDs.contains($0.criterionRevisionID)
         }
+        // A closed snapshot also contains older action revisions explicitly referenced by
+        // current verified evidence. Those dependencies are not extra working heads.
+        let expectedActions = Set(politicalCase.currentActionRevisionIDs + relevantLinks.compactMap { $0.actionRevisionID })
         let currentApproval = approved.contains { evaluation in
             guard let snapshot = context.find(evaluation.caseRevisionID) else { return false }
             return snapshot.promiseRevisionID == politicalCase.currentPromiseRevisionID &&
                 Set(snapshot.criteria.map { $0.id }) == Set(politicalCase.activeCriterionRevisionIDs) &&
-                Set(snapshot.actionRevisionIDs) == Set(politicalCase.currentActionRevisionIDs) &&
+                Set(snapshot.actionRevisionIDs) == expectedActions &&
                 relevantLinks.allSatisfy { link in
                     snapshot.evidenceLinks.contains(where: { $0.id == link.id && $0.state == .verified })
                 }

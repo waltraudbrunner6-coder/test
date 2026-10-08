@@ -52,11 +52,21 @@ public enum WorkspaceErrorMessage {
 
     private static func describe(_ error: DomainValidationError) -> String {
         switch error {
-        case .missingReference(let ref): return "Eine referenzierte Information fehlt (\(ref.kind))."
+        case .evaluationRequiresReadyCase: return "Eine neue Bewertung verlangt einen bewertungsbereiten Fall."
+        case .firstEvaluationOnly: return "Für diesen Fall wurde bereits ein Bewertungsstand begonnen. Verwende den vorhandenen Snapshot; Ersatzbewertungen folgen später."
+        case .methodologyConflict: return "Methodikversion 1.0 fehlt oder kollidiert mit dem eingefrorenen Inhalt. Sie wurde nicht überschrieben."
+        case .criterionReviewNotAllowed: return "Diese Kriteriumsbewertung kann nicht erneut oder nach historischer Freigabe geprüft werden."
+        case .missingReference(let ref):
+            switch ref.kind {
+            case .methodology: return "Die referenzierte Methodikversion fehlt."
+            case .caseRevision: return "Der referenzierte Bewertungssnapshot fehlt."
+            default: return "Eine referenzierte Information fehlt (\(ref.kind))."
+            }
         case .duplicateReference(let ref): return "Eine Information ist doppelt verknüpft (\(ref.kind))."
         case .relationshipMismatch(let ref):
             switch ref.kind {
             case .promiseRevision: return "Prüfe Originalzitat, Kontext und Sprecherzuordnung, bevor der Fall als geprüft markiert wird."
+            case .evidenceLink: return "Die Evidenz gehört nicht zu diesem Kriterium oder der Gegenbeleg ist nicht in der verwendeten Evidenzauswahl enthalten."
             case .criterionRevision: return "Der Kriterienbezug passt nicht zur aktuellen PromiseRevision. Binde den Prüfrahmen neu und bestätige das Kriterium erneut."
             default: return "Die Verknüpfung passt fachlich nicht zusammen (\(ref.kind))."
             }

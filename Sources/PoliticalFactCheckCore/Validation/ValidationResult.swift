@@ -1,6 +1,10 @@
 import Foundation
 
 public enum DomainValidationError: Error, Equatable {
+    case evaluationRequiresReadyCase
+    case firstEvaluationOnly
+    case methodologyConflict
+    case criterionReviewNotAllowed
     case missingReference(ObjectReference)
     case duplicateReference(ObjectReference)
     case relationshipMismatch(ObjectReference)

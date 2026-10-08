@@ -188,7 +188,13 @@ public enum RevisionRules {
         if old.id == new.id && old != new { throw DomainValidationError.immutableContentChanged(ObjectReference(kind: .caseRevision, id: old.id)) }
     }
     public static func validateReplacement(_ old: CriterionEvaluation, with new: CriterionEvaluation) throws {
-        if old.id == new.id && old != new { throw DomainValidationError.immutableContentChanged(ObjectReference(kind: .criterionEvaluation, id: old.id)) }
+        if old.id == new.id && old != new {
+            guard new.withReview(state: old.reviewState, review: old.review) == old,
+                  old.reviewState == .unreviewed, old.review == nil,
+                  new.reviewState == .reviewed, new.review != nil else {
+                throw DomainValidationError.immutableContentChanged(ObjectReference(kind: .criterionEvaluation, id: old.id))
+            }
+        }
     }
     public static func validateReplacement(_ old: SourceExcerpt, with new: SourceExcerpt) throws {
         if old.id == new.id {

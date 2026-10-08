@@ -418,6 +418,75 @@ public final class CaseWorkspaceModel: ObservableObject {
         } catch { present(error); return false }
     }
 
+    @discardableResult
+    public func startEvaluationSnapshot(cutoff: DatedValue) -> EntityID<CaseRevision>? {
+        do {
+            guard let store, let caseID = selectedCaseID else { throw WorkspaceInputError.caseUnavailable }
+            let snapshot = try store.startEvaluationSnapshot(caseID: caseID, cutoff: cutoff,
+                reviewer: currentReviewer(), at: Date())
+            reload(selecting: caseID)
+            return snapshot.id
+        } catch { present(error); return nil }
+    }
+
+    @discardableResult
+    public func createEvaluationDraft(snapshotID: EntityID<CaseRevision>, cutoff: DatedValue,
+        criteria: [ManualCriterionAssessment], overall: ManualAssessment,
+        facts: [NonEmptyText], interpretations: [NonEmptyText]) -> EntityID<CaseEvaluation>? {
+        do {
+            guard let store, let caseID = selectedCaseID else { throw WorkspaceInputError.caseUnavailable }
+            let evaluation = try store.createEvaluationDraft(caseID: caseID, snapshotID: snapshotID, cutoff: cutoff,
+                criteria: criteria, overall: overall, facts: facts, interpretations: interpretations,
+                reviewer: currentReviewer(), at: Date())
+            reload(selecting: caseID)
+            return evaluation.id
+        } catch { present(error); return nil }
+    }
+
+    @discardableResult
+    public func reviewCriterionEvaluation(_ id: EntityID<CriterionEvaluation>) -> Bool {
+        do {
+            guard let store, let caseID = selectedCaseID else { throw WorkspaceInputError.caseUnavailable }
+            try store.reviewCriterionEvaluation(caseID: caseID, childID: id, reviewer: currentReviewer(), at: Date())
+            reload(selecting: caseID)
+            return true
+        } catch { present(error); return false }
+    }
+
+    @discardableResult
+    public func submitEvaluationForReview(_ id: EntityID<CaseEvaluation>) -> Bool {
+        evaluationStatus(id, approve: false)
+    }
+    @discardableResult
+    public func approveEvaluation(_ id: EntityID<CaseEvaluation>) -> Bool {
+        evaluationStatus(id, approve: true)
+    }
+    private func evaluationStatus(_ id: EntityID<CaseEvaluation>, approve: Bool) -> Bool {
+        do {
+            guard let store, let caseID = selectedCaseID else { throw WorkspaceInputError.caseUnavailable }
+            let reviewer = try currentReviewer()
+            if approve {
+                try store.approveEvaluation(caseID: caseID, evaluationID: id, reviewer: reviewer, at: Date())
+            } else {
+                try store.submitEvaluationForReview(caseID: caseID, evaluationID: id, reviewer: reviewer, at: Date())
+            }
+            reload(selecting: caseID)
+            return true
+        } catch { present(error); return false }
+    }
+
+    public func evaluationWarnings(_ id: EntityID<CaseEvaluation>) -> [String] {
+        guard let graph = selectedContext, let evaluation = graph.find(id) else { return [] }
+        return DomainValidator.validate(evaluation, in: graph).warnings.map { warning in
+            switch warning {
+            case .temporalInterpretationRequired:
+                return "Zeitlicher Bezug ist nicht eindeutig; menschliche Einordnung erforderlich."
+            case .retrospectivePublication(let id):
+                return "Rückblickende Dokumentation: Quellenfassung \(id.rawValue.uuidString) wurde nach dem Bewertungsstichtag publiziert. Ereignisbezug menschlich prüfen."
+            }
+        }
+    }
+
     public var confirmedCriteria: [CriterionRevision] {
         guard let graph = selectedContext, let politicalCase = selectedCase else { return [] }
         return politicalCase.activeCriterionRevisionIDs.compactMap { graph.find($0) }.filter { $0.state == .confirmed }

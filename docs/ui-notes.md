@@ -1,4 +1,4 @@
-# Native macOS UI — Phase 3.2a
+# Native macOS UI — Phase 3.2b
 
 ## Aufbau
 
@@ -34,7 +34,7 @@ Auf macOS: `swift test` für Core, Persistence und App-Modell; `xcodebuild -proj
 
 ## Bewusste Grenzen
 
-Noch keine freie Bearbeitung vorhandener Versprechen oder bestätigter Kriterien; Änderungen benötigen zunächst explizite neue Revisionen. Es gibt keine UI zum Erfassen von ActionParticipations, CaseSnapshots oder Bewertungen, keine produktive Methodikversion, keine Bewertungsfreigabe, keine Archivierung, Suche, Filter, Dateiablage, Import/Export, Netzwerk, KI, Cloud, Medien oder Veröffentlichung. Die Tabellen der Quellen und Kriterien sind für einen einzelnen lokalen MVP-Fall gedacht. SwiftUI-Previews erzeugen ausschließlich synthetische Daten in einem In-Memory-Store.
+Noch keine freie Bearbeitung vorhandener Versprechen oder bestätigter Kriterien; Änderungen benötigen zunächst explizite neue Revisionen. Es gibt keine UI zum Erfassen von ActionParticipations, keinen Ersatzreview oder freie Bearbeitung gespeicherter Bewertungsinhalte, keine Archivierung, Suche, Filter, Dateiablage, Import/Export, Netzwerk, KI, Cloud, Medien oder Veröffentlichung. Die Tabellen der Quellen und Kriterien sind für einen einzelnen lokalen MVP-Fall gedacht. SwiftUI-Previews erzeugen ausschließlich synthetische Daten in einem In-Memory-Store.
 
 ## Phase 3.1: manuelle Eingabe, noch keine Bewertung
 
@@ -57,3 +57,15 @@ Der Versprechenbereich zeigt Kontext, Sprecher, jeweilige Prüfstatus und Fundst
 Extern bestätigter Ausgangsstand für diesen Schritt: `3a484a6261621dd21c94a023d6c0a0f403799147`, Apple Swift 6.1.2, 160 Tests erfolgreich und nativer arm64-Build erfolgreich. Neu: 16 Core-, 8 Persistence- und 6 AppModel-Tests, erwartet 190 insgesamt. Die bisherigen 160 Tests bleiben unverändert. Neue Tests prüfen Live-Fundstellen/Quellenfassungen, Kontext/Sprecher und Zitat-Erhaltung, Kriterienneubindung mit erneuter menschlicher Bestätigung, beide Workflowübergänge, historische Sperre, Rollback, Audit, echte temporäre Store-Wiederöffnung und die Abwesenheit erzeugter Bewertungen. Die reale Ausführung dieser Änderungen benötigt weiterhin die macOS-CI.
 
 Für Phase 3.2a endeten die tatsächlichen lokalen Versuche `swift --version`, `swift test` und `xcodebuild` mit Exit 127 (`command not found`). `git diff --check` ist erfolgreich; dies ersetzt keinen Compiler-/Testnachweis. Es wird kein neuer Build-Erfolg behauptet.
+
+## Phase 3.2b: manuelle Bewertung
+
+Aus einem bewertungsbereiten Case führt „Neue Bewertung starten“ in ein Sheet. Der Bewertungsstichtag muss ausdrücklich als Kalendertag (UTC) eingegeben werden; es gibt keinen stillen aktuellen Datumswert. Nach Bestätigung wird genau ein unveränderlicher Snapshot und die kanonische MethodologyVersion 1.0 gespeichert. Die Zusammenfassung zeigt Promise-/Kriterienrevisionen, Handlungen, geprüfte Evidenz, Quellenfassungen/Fundstellen und Erstellungszeit. Ein begonnener Snapshot lässt sich über „Snapshot weiterbewerten“ wieder öffnen; sein Inhalt wird nicht geändert. Vor der ersten Entwurfsspeicherung wird beim Fortsetzen der Stichtag erneut eingegeben, da CaseRevision im bestehenden Modell keinen Stichtag hält.
+
+Alle sechs Kategorien und alle drei Evidenzsicherheiten beginnen ausdrücklich **ohne Auswahl**. Jeder Kriteriumseditor zeigt Messlatte, Kernstatus, Materialität, Frist, nur seine verified Snapshot-Links, Beziehung/Direktheit, Fundstellen und optionale Handlung. Gegenbelege können ausschließlich innerhalb ausgewählter verwendeter Links markiert werden. Begründung, Unsicherheiten und strukturierte Nicht-überprüfbar-Gründe werden menschlich eingegeben. Die Gesamtbewertung besitzt separate Eingaben; Fakten und Interpretationen sind klar getrennt. Keine KI, keine Aggregation, keine automatisch vorgeschlagene Kategorie.
+
+Ein vollständiger gültiger Entwurf persistiert die unreviewed CriterionEvaluations, die draft CaseEvaluation und den evaluated-Meilenstein atomar. Die Fallansicht zeigt jedes Kindergebnis mit verwendetem Material und bietet „Kriteriumsbewertung prüfen“ an. Erst danach erfolgen getrennt „Bewertung zur Prüfung vorlegen“ und „Bewertung freigeben“. Freigabe prüft den Core erneut und setzt zugleich den historischen approved-Meilenstein. Alle historischen Inhalte, Original-Approval und konkrete Manifest-IDs bleiben erhalten. Retrospektive Publikation und uneindeutige Zeitbezüge werden als sichtbare Domainwarnungen dargestellt, nicht still ausgeschlossen. ReviewRequired bleibt neben der historischen Freigabe sichtbar; Ersatzbewertung folgt später.
+
+Bekannte Grenzen: Ungespeicherte Formtexte sind nur Sheet-State; Schließen verliert diese Texte, nicht den gespeicherten Snapshot. Gespeicherte Entscheidungsinhalte werden nicht in-place editiert. Korrektur über neue Draft-Datensätze, Ersatzreview, mehrere parallele Bewertungen und satzweise Quellenprüfung folgen separat. Ein formal gültiger Draft kann nach bestehenden Regeln erst bei der finalen Freigabe blockiert werden (etwa positive Kategorie ohne supports oder niedrige Sicherheit bei negativem Urteil); die Fehlermeldung bleibt sichtbar. Authentizität, Materialität und Wahrheitsgehalt sind weiterhin menschlich zu prüfen.
+
+Extern bestätigte Basis: a551f82c5cdd5a48881005543e4c6b08c8754815, Apple Swift 6.1.2, 190/190 Tests und nativer arm64-Build erfolgreich. Neu: 27 Core-, 21 Persistence- und 6 AppModel-Tests; erwartet **244 Tests**. Die bisherigen 190 Tests und der Workflow bleiben unverändert. Lokal ist noch keine neue erfolgreiche Swift-/Xcode-Ausführung nachgewiesen; diese Änderungen benötigen ihren eigenen macOS-CI-Lauf.

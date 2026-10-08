@@ -510,3 +510,262 @@ struct PromiseReadinessSheet: View {
             speakerExcerptIDs: orderedExcerpts(speakerExcerpts, in: workspace.selectedContext)) { dismiss() }
     }
 }
+
+// Local form state is not a second domain model. All choices start explicitly unset.
+private struct AssessmentFormState {
+    var categoryIndex = -1
+    var confidenceIndex = -1
+    var rationale = ""
+    var uncertainties = ""
+    var reasons: Set<Int> = []
+    func domain() throws -> ManualAssessment {
+        guard evaluationCategories.indices.contains(categoryIndex), confidenceValues.indices.contains(confidenceIndex) else {
+            throw EvaluationFormError.explicitChoicesRequired
+        }
+        return try ManualAssessment(category: evaluationCategories[categoryIndex], rationale: NonEmptyText(rationale),
+            confidence: confidenceValues[confidenceIndex], uncertainties: assessmentLines(uncertainties),
+            notVerifiableReasons: notVerifiableReasons.enumerated().filter { reasons.contains($0.offset) }.map { $0.element })
+    }
+}
+private struct CriterionFormState: Identifiable {
+    let id: EntityID<CriterionRevision>
+    var assessment = AssessmentFormState()
+    var evidence: Set<EntityID<EvidenceLink>> = []
+    var counterEvidence: Set<EntityID<EvidenceLink>> = []
+}
+private enum EvaluationFormError: Error { case explicitChoicesRequired }
+private let evaluationCategories: [EvaluationCategory] = [.fulfilled, .mostlyFulfilled, .partiallyFulfilled, .notFulfilled, .contraryAction, .notVerifiable]
+private let confidenceValues: [EvidenceConfidence] = [.high, .medium, .low]
+private let notVerifiableReasons: [NotVerifiableReason] = [.unclearPromise, .openDeadline, .conditionNotMet, .missingEvidence, .unclearAttribution, .conflictingSources, .researchBlocked]
+private func assessmentLines(_ value: String) throws -> [NonEmptyText] {
+    try value.split(separator: "\n").map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { !$0.isEmpty }.map { try NonEmptyText($0) }
+}
+
+struct ManualEvaluationSheet: View {
+    @EnvironmentObject private var workspace: CaseWorkspaceModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var cutoffText = ""
+    @State private var cutoff: DatedValue?
+    @State private var snapshotID: EntityID<CaseRevision>?
+    @State private var criteria: [CriterionFormState] = []
+    @State private var overall = AssessmentFormState()
+    @State private var facts = ""
+    @State private var interpretations = ""
+    @State private var formError: String?
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Manuelle Bewertung · Methodik 1.0").font(.title2)
+                Text("Kein automatisches Urteil. Materialität, Zurechnung und Gesamturteil entscheidet der Mensch.")
+                if let snapshotID, let graph = workspace.selectedContext, let snapshot = graph.find(snapshotID) {
+                    Text("Bewertungsstichtag: \(cutoffText) (UTC)").font(.headline)
+                    EvaluationSnapshotSummary(snapshot: snapshot, graph: graph)
+                    criterionEditors(snapshot, graph: graph)
+                    overallEditor
+                    Button("Bewertungsentwurf speichern", action: saveDraft).buttonStyle(.borderedProminent)
+                } else {
+                    startEditor
+                }
+                if let formError { Text(formError).foregroundStyle(.red) }
+                WorkspaceFormError()
+                Button("Schließen") { dismiss() }
+                Text("Der gespeicherte Snapshot bleibt unverändert. Ungespeicherte Texte gehen beim Schließen verloren; beim Fortsetzen ist der Stichtag erneut ausdrücklich einzugeben.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }.padding()
+        }.frame(minWidth: 760, minHeight: 650)
+    }
+
+    private var startEditor: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            TextField("Bewertungsstichtag (JJJJ-MM-TT, UTC)", text: $cutoffText)
+            Text("Der Stichtag begrenzt den bewerteten Sachstand. Publikationsdatum und Ereignisdatum bleiben getrennt.")
+                .font(.caption)
+            Button("Stichtag bestätigen und Snapshot öffnen", action: start)
+        }
+    }
+    private func criterionEditors(_ snapshot: CaseRevision, graph: DomainContext) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            ForEach($criteria) { $input in
+                if let criterion = graph.find(input.id) {
+                    ManualCriterionEditor(criterion: criterion, snapshot: snapshot, graph: graph, input: $input)
+                }
+            }
+        }
+    }
+    private var overallEditor: some View {
+        GroupBox("Gesamtbewertung – separate menschliche Entscheidung") {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Die Kriterienbewertungen sind Kontext; es gibt keine mathematische Aggregation.").font(.caption)
+                AssessmentFields(state: $overall)
+                TextField("Fakten – ein menschlicher Tatsachenbefund pro Zeile", text: $facts, axis: .vertical).lineLimit(3...8)
+                TextField("Interpretationen – eine Einordnung pro Zeile", text: $interpretations, axis: .vertical).lineLimit(3...8)
+                Text("Der Entwurf beginnt ungeprüft. Kriteriumsprüfung, Vorlage und Freigabe erfolgen anschließend getrennt im Fall.")
+                    .font(.caption)
+            }.padding(8)
+        }
+    }
+    private func start() {
+        formError = nil
+        guard let date = parseOptionalDate(cutoffText) else {
+            formError = "Bitte einen gültigen Bewertungsstichtag eingeben (JJJJ-MM-TT)."; return
+        }
+        do {
+            let chosen = try manualDay(date, role: .evaluationCutoff)
+            let existing = workspace.selectedContext?.caseRevisions.first
+            guard let id = existing?.id ?? workspace.startEvaluationSnapshot(cutoff: chosen),
+                  let graph = workspace.selectedContext, let snapshot = graph.find(id) else { return }
+            cutoff = chosen
+            snapshotID = id
+            criteria = snapshot.criteria.map { CriterionFormState(id: $0.id) }
+        } catch { formError = WorkspaceErrorMessage.describe(error) }
+    }
+    private func saveDraft() {
+        guard let snapshotID, let cutoff, let graph = workspace.selectedContext, let snapshot = graph.find(snapshotID) else { return }
+        do {
+            let inputs = try criteria.map { input in
+                let links = snapshot.evidenceLinks.filter { input.evidence.contains($0.id) }.map { $0.id }
+                return try ManualCriterionAssessment(criterionRevisionID: input.id, assessment: input.assessment.domain(),
+                    evidenceLinkIDs: links, counterEvidenceLinkIDs: links.filter { input.counterEvidence.contains($0) })
+            }
+            let id = try workspace.createEvaluationDraft(snapshotID: snapshotID, cutoff: cutoff, criteria: inputs,
+                overall: overall.domain(), facts: assessmentLines(facts), interpretations: assessmentLines(interpretations))
+            if id != nil { dismiss() }
+        } catch EvaluationFormError.explicitChoicesRequired {
+            formError = "Kategorie und Evidenzsicherheit müssen für jedes Kriterium und das Gesamturteil ausdrücklich gewählt werden."
+        } catch { formError = WorkspaceErrorMessage.describe(error) }
+    }
+}
+
+private struct AssessmentFields: View {
+    @Binding var state: AssessmentFormState
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Picker("Kategorie", selection: $state.categoryIndex) {
+                Text("Ausdrücklich wählen").tag(-1)
+                ForEach(evaluationCategories.indices, id: \.self) { index in Text(evaluationCategories[index].manualLabel).tag(index) }
+            }
+            Picker("Evidenzsicherheit", selection: $state.confidenceIndex) {
+                Text("Ausdrücklich wählen").tag(-1)
+                ForEach(confidenceValues.indices, id: \.self) { index in Text(confidenceValues[index].manualLabel).tag(index) }
+            }
+            Text("Qualitative Beleglage, keine Wahrheitswahrscheinlichkeit.").font(.caption)
+            TextField("Begründung (erforderlich)", text: $state.rationale, axis: .vertical).lineLimit(3...8)
+            TextField("Unsicherheiten – eine pro Zeile", text: $state.uncertainties, axis: .vertical).lineLimit(2...6)
+            if state.categoryIndex == 5 { reasonChoices }
+        }
+    }
+    private var reasonChoices: some View {
+        VStack(alignment: .leading) {
+            Text("Nicht überprüfbar – mindestens einen Grund wählen")
+            ForEach(notVerifiableReasons.indices, id: \.self) { index in
+                Toggle(notVerifiableReasons[index].manualLabel, isOn: Binding(
+                    get: { state.reasons.contains(index) },
+                    set: { chosen in if chosen { state.reasons.insert(index) } else { state.reasons.remove(index) } }))
+            }
+        }
+    }
+}
+
+private struct ManualCriterionEditor: View {
+    let criterion: CriterionRevision
+    let snapshot: CaseRevision
+    let graph: DomainContext
+    @Binding var input: CriterionFormState
+    private var links: [EvidenceLink] {
+        snapshot.evidenceLinks.filter { $0.state == .verified }.compactMap { graph.find($0.id) }
+            .filter { $0.criterionRevisionID == criterion.id }
+    }
+    var body: some View {
+        GroupBox(criterion.goal.value) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Kernkriterium: \(criterion.isCore ? "Ja" : "Nein")")
+                Text("Materialität: \(criterion.materialityRule.value)")
+                Text("Frist: \(criterion.deadline.content.knownValue?.end?.formatted() ?? "Unbekannt / offen")")
+                Text("Revision: \(criterion.id.rawValue.uuidString)").font(.caption)
+                if links.isEmpty { Text("Keine geprüfte Evidenz zu diesem Snapshot-Kriterium.").foregroundStyle(.secondary) }
+                ForEach(links, id: \.id) { link in evidenceChoice(link) }
+                AssessmentFields(state: $input.assessment)
+            }.padding(8)
+        }
+    }
+    private func evidenceChoice(_ link: EvidenceLink) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Toggle("Verwenden: \(link.relationship.manualLabel) · \(link.directness.manualLabel) · \(link.rationale.value)",
+                isOn: Binding(get: { input.evidence.contains(link.id) }, set: { selected in
+                    if selected { input.evidence.insert(link.id) }
+                    else { input.evidence.remove(link.id); input.counterEvidence.remove(link.id) }
+                }))
+            Toggle("Innerhalb der Auswahl als Gegenbeleg kennzeichnen", isOn: Binding(
+                get: { input.counterEvidence.contains(link.id) }, set: { selected in
+                    if selected && input.evidence.contains(link.id) { input.counterEvidence.insert(link.id) }
+                    else { input.counterEvidence.remove(link.id) }
+                })).disabled(!input.evidence.contains(link.id))
+            if let actionID = link.actionRevisionID, let action = graph.find(actionID) {
+                Text("Handlung: \(action.title.value) · Revision \(action.metadata.number)").font(.caption)
+            }
+            ForEach(link.excerptIDs, id: \.self) { id in
+                if let excerpt = graph.find(id) {
+                    Text("\(graph.find(excerpt.sourceVersionID)?.title?.value ?? "Quellenfassung") · \(excerpt.locator.value) — \(excerpt.text.value)").font(.caption)
+                }
+            }
+        }.padding(.vertical, 5)
+    }
+}
+
+struct EvaluationSnapshotSummary: View {
+    let snapshot: CaseRevision
+    let graph: DomainContext
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Unveränderlicher Snapshot: \(snapshot.id.rawValue.uuidString)").font(.caption)
+            Text("PromiseRevision: \(snapshot.promiseRevisionID.rawValue.uuidString)").font(.caption)
+            ForEach(snapshot.criteria, id: \.id) { entry in
+                Text("Kriterium: \(graph.find(entry.id)?.goal.value ?? "Fehlt") · \(entry.id.rawValue.uuidString)").font(.caption)
+            }
+            Text("\(snapshot.actionRevisionIDs.count) Handlungsrevisionen · \(snapshot.evidenceLinks.count) geprüfte Evidenzlinks · \(snapshot.sourceVersions.count) Quellenfassungen · \(snapshot.excerpts.count) Fundstellen")
+                .font(.caption)
+            Text("Erstellt: \(snapshot.metadata.createdAt.formatted()) · Methodik 1.0").font(.caption)
+        }
+    }
+}
+
+private extension EvaluationCategory {
+    var manualLabel: String {
+        switch self {
+        case .fulfilled: "Erfüllt"
+        case .mostlyFulfilled: "Überwiegend erfüllt"
+        case .partiallyFulfilled: "Teilweise erfüllt"
+        case .notFulfilled: "Nicht erfüllt"
+        case .contraryAction: "Gegenteilig gehandelt"
+        case .notVerifiable: "Nicht überprüfbar"
+        }
+    }
+}
+private extension EvidenceConfidence {
+    var manualLabel: String {
+        switch self { case .high: "Hoch"; case .medium: "Mittel"; case .low: "Niedrig" }
+    }
+}
+private extension EvidenceRelationship {
+    var manualLabel: String {
+        switch self { case .supports: "stützt"; case .contradicts: "widerspricht"; case .contextualizes: "kontextualisiert" }
+    }
+}
+private extension EvidenceDirectness {
+    var manualLabel: String { self == .direct ? "direkt" : "indirekt" }
+}
+extension NotVerifiableReason {
+    var manualLabel: String {
+        switch self {
+        case .unclearPromise: "Unklare Aussage"
+        case .openDeadline: "Offene Frist"
+        case .conditionNotMet: "Bedingung nicht eingetreten"
+        case .missingEvidence: "Entscheidende Evidenz fehlt"
+        case .unclearAttribution: "Zurechnung ungeklärt"
+        case .conflictingSources: "Quellenkonflikt"
+        case .researchBlocked: "Recherchezugriff blockiert"
+        }
+    }
+}

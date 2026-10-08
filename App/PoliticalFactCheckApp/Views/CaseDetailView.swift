@@ -398,6 +398,13 @@ struct CaseDetailView: View {
 
     private var evaluationSection: some View {
         section("Bewertung", systemImage: "checkmark.seal") {
+            if politicalCase.workflowState == .readyForEvaluation && evaluations.isEmpty {
+                Button(graph.caseRevisions.isEmpty ? "Neue Bewertung starten" : "Snapshot weiterbewerten") {
+                    sheet = .manualEvaluation
+                }
+                Text("Methodik 1.0 · Kategorie und Evidenzsicherheit werden ausschließlich menschlich gewählt.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             if evaluations.isEmpty {
                 Text("Noch keine Bewertung").foregroundStyle(.secondary)
             }
@@ -414,12 +421,74 @@ struct CaseDetailView: View {
             LabeledContent("Status", value: evaluation.status.displayName)
             LabeledContent("Stichtag", value: evaluation.cutoff.displayText)
             Text(evaluation.rationale.value).textSelection(.enabled)
+            evaluationDetails(evaluation)
             Text("Historischer Snapshot: \(evaluation.caseRevisionID.rawValue.uuidString)")
                 .font(.caption2).foregroundStyle(.secondary)
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    @ViewBuilder private func evaluationDetails(_ evaluation: CaseEvaluation) -> some View {
+        Text("Methodik: \(graph.find(evaluation.methodologyVersionID)?.version.value ?? "Fehlt")")
+        if let snapshot = graph.find(evaluation.caseRevisionID) {
+            EvaluationSnapshotSummary(snapshot: snapshot, graph: graph)
+        }
+        assessmentTexts("Fakten", evaluation.facts)
+        assessmentTexts("Interpretationen", evaluation.interpretations)
+        assessmentTexts("Unsicherheiten", evaluation.uncertainties)
+        Text("Nicht überprüfbar – Gründe: \(evaluation.notVerifiableReasons.map { $0.manualLabel }.joined(separator: ", "))")
+            .font(.caption)
+        ForEach(evaluation.criterionEvaluationIDs, id: \.self) { id in
+            if let child = graph.find(id) { criterionEvaluationRow(child, parent: evaluation) }
+        }
+        ForEach(Array(workspace.evaluationWarnings(evaluation.id).enumerated()), id: \.offset) { entry in
+            Label(entry.element, systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
+        }
+        if evaluation.status == .draft {
+            Button("Bewertung zur Prüfung vorlegen") { workspace.submitEvaluationForReview(evaluation.id) }
+        } else if evaluation.status == .needsReview {
+            Button("Bewertung freigeben") { workspace.approveEvaluation(evaluation.id) }
+            Text("Freigabe verlangt die separate menschliche Prüfung jedes Kriteriums.").font(.caption)
+        } else if evaluation.status == .reviewRequired {
+            Text("Erneute Prüfung erforderlich. Das historische Urteil und seine Freigabe bleiben erhalten; Ersatzreview folgt später.")
+                .foregroundStyle(.orange)
+        }
+        if let approval = evaluation.approval {
+            Text("Historische Freigabe: \(graph.find(approval.reviewerID)?.displayName.value ?? "Reviewer fehlt") · \(approval.reviewedAt.formatted())")
+                .font(.caption)
+        }
+    }
+
+    private func assessmentTexts(_ title: String, _ values: [NonEmptyText]) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title).font(.headline)
+            ForEach(Array(values.enumerated()), id: \.offset) { entry in Text(entry.element.value) }
+        }
+    }
+
+    private func criterionEvaluationRow(_ child: CriterionEvaluation, parent: CaseEvaluation) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(graph.find(child.criterionRevisionID)?.goal.value ?? "Kriterium fehlt").font(.headline)
+            Text("\(child.category.displayName) · \(child.confidence.displayName)")
+            Text(child.rationale.value)
+            assessmentTexts("Unsicherheiten", child.uncertainties)
+            Text(child.notVerifiableReasons.map { $0.manualLabel }.joined(separator: ", "))
+            ForEach(child.evidenceLinkIDs, id: \.self) { id in
+                if let link = graph.find(id) {
+                    Text("\(child.counterEvidenceLinkIDs.contains(id) ? "Gegenbeleg" : "Verwendeter Beleg"): \(link.relationship.displayName) · \(link.directness.displayName) · \(link.rationale.value)").font(.caption)
+                }
+            }
+            if let review = child.review {
+                Text("Menschlich geprüft: \(graph.find(review.reviewerID)?.displayName.value ?? "Fehlt") · \(review.reviewedAt.formatted())").font(.caption)
+            } else {
+                Text("Noch ungeprüft").font(.caption)
+                if parent.status == .draft || parent.status == .needsReview {
+                    Button("Kriteriumsbewertung prüfen") { workspace.reviewCriterionEvaluation(child.id) }
+                }
+            }
+        }.padding(8)
     }
 
     @ViewBuilder private var deleteDraftSection: some View {

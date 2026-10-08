@@ -77,6 +77,8 @@ struct MainWindowView: View {
             ActionReviewSheet(revisionID: id)
         case .promiseReadiness:
             PromiseReadinessSheet()
+        case .manualEvaluation:
+            ManualEvaluationSheet()
         case .reviewer:
             ReviewerSettingsSheet()
         }
@@ -84,7 +86,7 @@ struct MainWindowView: View {
 }
 
 enum EditorSheet: Identifiable {
-    case newCase, newCriterion, newSource, reviewer, newAction, newEvidence, promiseReadiness
+    case newCase, newCriterion, newSource, reviewer, newAction, newEvidence, promiseReadiness, manualEvaluation
     case reviewAction(EntityID<ActionRevision>)
     var id: String {
         switch self {
@@ -95,6 +97,7 @@ enum EditorSheet: Identifiable {
         case .newAction: "newAction"
         case .newEvidence: "newEvidence"
         case .promiseReadiness: "promiseReadiness"
+        case .manualEvaluation: "manualEvaluation"
         case .reviewAction(let id): "reviewAction-\(id.rawValue.uuidString)"
         }
     }
