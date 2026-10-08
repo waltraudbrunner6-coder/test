@@ -383,6 +383,41 @@ public final class CaseWorkspaceModel: ObservableObject {
         } catch { present(error); return false }
     }
 
+    @discardableResult
+    public func verifyPromiseForEvaluationReadiness(contextText: String,
+        contextExcerptIDs: [EntityID<SourceExcerpt>], speakerExcerptIDs: [EntityID<SourceExcerpt>]) -> Bool {
+        do {
+            guard let store, let caseID = selectedCaseID else { throw WorkspaceInputError.caseUnavailable }
+            try store.verifyPromiseForEvaluationReadiness(caseID: caseID, contextText: NonEmptyText(contextText),
+                contextExcerptIDs: contextExcerptIDs, speakerExcerptIDs: speakerExcerptIDs,
+                reviewer: currentReviewer(), at: Date())
+            reload(selecting: caseID)
+            return true
+        } catch { present(error); return false }
+    }
+
+    @discardableResult
+    public func markVerified() -> Bool { advanceReadiness(to: .verified) }
+
+    @discardableResult
+    public func prepareForEvaluation() -> Bool { advanceReadiness(to: .readyForEvaluation) }
+
+    /// Pure capability query against the same Core transition used by the store.
+    public func canAdvanceReadiness(to state: CaseWorkflowState) -> Bool {
+        guard state == .verified || state == .readyForEvaluation else { return false }
+        guard let graph = selectedContext, let politicalCase = selectedCase else { return false }
+        return (try? DomainChanges.transition(politicalCase, to: state, at: Date(), in: graph)) != nil
+    }
+
+    private func advanceReadiness(to state: CaseWorkflowState) -> Bool {
+        do {
+            guard let store, let caseID = selectedCaseID else { throw WorkspaceInputError.caseUnavailable }
+            try store.advanceEvaluationReadiness(caseID: caseID, to: state, reviewer: currentReviewer(), at: Date())
+            reload(selecting: caseID)
+            return true
+        } catch { present(error); return false }
+    }
+
     public var confirmedCriteria: [CriterionRevision] {
         guard let graph = selectedContext, let politicalCase = selectedCase else { return [] }
         return politicalCase.activeCriterionRevisionIDs.compactMap { graph.find($0) }.filter { $0.state == .confirmed }

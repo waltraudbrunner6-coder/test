@@ -4,6 +4,10 @@ public enum DomainValidationError: Error, Equatable {
     case missingReference(ObjectReference)
     case duplicateReference(ObjectReference)
     case relationshipMismatch(ObjectReference)
+    case originalQuoteNotVerified
+    case speakerAssignmentUnavailable
+    case historicalReadinessChangeDenied
+    case readinessRequiresDocumentedCase
     case missingHumanReview
     case unknownVerifiedValue
     case missingSourceIdentity

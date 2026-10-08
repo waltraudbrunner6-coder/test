@@ -32,6 +32,7 @@ struct CaseDetailView: View {
             VStack(alignment: .leading, spacing: 20) {
                 overviewSection
                 promiseSection
+                readinessSection
                 criteriaSection
                 sourcesSection
                 actionsSection
@@ -75,6 +76,59 @@ struct CaseDetailView: View {
             LabeledContent("Partei / Organisation") { Text(actorName(value.party.content)) }
             LabeledContent("Aussagezeitpunkt") { Text(value.statementDate.content.displayText) }
             LabeledContent("Zitatstatus") { Text(value.quote.verification.displayName) }
+            promiseContextAndSpeaker(value)
+        }
+    }
+
+    private func promiseContextAndSpeaker(_ value: PromiseRevision) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            LabeledContent("Kontext", value: value.context.content.displayText)
+            LabeledContent("Kontextstatus", value: value.context.verification.displayName)
+            assertionExcerpts(value.context.excerptIDs)
+            LabeledContent("Sprecherstatus", value: value.speaker.verification.displayName)
+            assertionExcerpts(value.speaker.excerptIDs)
+        }
+    }
+
+    private func assertionExcerpts(_ ids: [EntityID<SourceExcerpt>]) -> some View {
+        ForEach(ids, id: \.self) { id in
+            if let excerpt = graph.find(id) {
+                Text("\(excerptSource(excerpt)) · \(excerpt.locator.value) — \(excerpt.text.value)").font(.caption)
+            }
+        }
+    }
+
+    private var readinessSection: some View {
+        section("Bewertungsreife", systemImage: "checklist.checked") {
+            if let promise {
+                LabeledContent("Originalzitat", value: promise.quote.verification.displayName)
+                LabeledContent("Kontext", value: promise.context.verification.displayName)
+                LabeledContent("Sprecherzuordnung", value: promise.speaker.verification.displayName)
+            }
+            LabeledContent("Aktive Kriterien", value: String(activeCriteria.count))
+            LabeledContent("Bestätigt / Draft", value: "\(activeCriteria.filter { $0.state == .confirmed }.count) / \(activeCriteria.filter { $0.state == .draft }.count)")
+            LabeledContent("Workflow", value: politicalCase.workflowState.displayName)
+            readinessActions
+            Text("Diese Anzeige dient der Orientierung. Der Core prüft jeden Statuswechsel. Bewertungsreife ist noch keine Bewertung.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder private var readinessActions: some View {
+        if politicalCase.workflowState == .documented {
+            Button("Prüfrahmen bestätigen") { sheet = .promiseReadiness }
+            Button("Fall als geprüft markieren") { workspace.markVerified() }
+                .disabled(!workspace.canAdvanceReadiness(to: .verified))
+            if !workspace.canAdvanceReadiness(to: .verified) {
+                Text("Bestätige zunächst Originalzitat, Kontext und Sprecherzuordnung.").font(.caption).foregroundStyle(.secondary)
+            }
+        } else if politicalCase.workflowState == .verified {
+            Button("Zur Bewertung vorbereiten") { workspace.prepareForEvaluation() }
+                .disabled(!workspace.canAdvanceReadiness(to: .readyForEvaluation))
+            if !workspace.canAdvanceReadiness(to: .readyForEvaluation) {
+                Text("Mindestens ein aktives Kriterium muss für den aktuellen Prüfrahmen menschlich bestätigt sein. Neu angebundene Draft-Kriterien müssen erneut bestätigt werden.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
         }
     }
 

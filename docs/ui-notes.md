@@ -1,4 +1,4 @@
-# Native macOS UI — Phase 3.1
+# Native macOS UI — Phase 3.2a
 
 ## Aufbau
 
@@ -17,6 +17,8 @@
 - Quellenfassung und Fundstelle durch eine menschliche Aktion als geprüft markieren; dabei entstehen neue unveränderliche IDs
 - Originalzitat anhand des geprüften wortgleichen Auszugs separat bestätigen
 - erlaubten Workflowübergang von `candidate` zu `documented` ausführen
+- Kontext und bestehenden Sprecher mit separat ausgewählten geprüften Fundstellen menschlich bestätigen
+- neu angebundene Kriterien erneut bestätigen und getrennt `documented → verified → readyForEvaluation` fortschreiben
 - nur löschbare Draft-Cases löschen
 - Handlungen/Entwicklungen mit allen sechs vorhandenen ActionTypes und optionalen Quellenbezügen ungeprüft erfassen
 - Beschreibung, Ereignisdatum und Geltungsbereich einer Handlung ausdrücklich anhand ausgewählter geprüfter Fundstellen menschlich prüfen; eine neue ActionRevision entsteht, die vorherige bleibt lesbar
@@ -40,6 +42,18 @@ Noch keine freie Bearbeitung vorhandener Versprechen oder bestätigter Kriterien
 
 Eine Handlung ist noch keine Bewertung. `EvidenceRelationship` ist keine Bewertungskategorie. Beziehung, Direktheit, Begründung und zeitlicher Bezug werden vom Menschen festgelegt und separat geprüft; es gibt keine automatische Schlussfolgerung aus `contradicts`. Nur der explizite menschliche Prüfschritt mit `HumanReview` kann eine Evidenz verifizieren. Die bestehende Core-State-Machine verlangt zwei separate Übergänge; die UI bietet dafür „Evidenz zur Prüfung vorlegen“ und „Evidenz prüfen“ an. Schaltflächen prüfen die erlaubte Transition über `DomainChanges`; der Store prüft erneut mit dem frischen Fallgraphen. Fehler bleiben im Workspace und in den neuen Dialogen sichtbar.
 
-Attribution wird nicht aus Parteizugehörigkeit abgeleitet. ActionParticipation-Erfassung bleibt nächster Ausbau. Die Handlungsprüfung bestätigt gemeinsam die drei asserted fields; getrennte Feldprüfungen, freie Inhaltsbearbeitung und Korrektur vorhandener Evidenzlinks sind noch nicht Teil dieser Oberfläche. Historische Handlungsrevisionen sind nur lesend. Weitere Case-Übergänge über `documented` hinaus werden noch nicht angeboten. Keine neue Evaluation, kein Bewertungssnapshot und keine produktive MethodologyVersion werden erzeugt. Bewertung folgt erst in Phase 3.2.
+Attribution wird nicht aus Parteizugehörigkeit abgeleitet. ActionParticipation-Erfassung bleibt nächster Ausbau. Die Handlungsprüfung bestätigt gemeinsam die drei asserted fields; getrennte Feldprüfungen, freie Inhaltsbearbeitung und Korrektur vorhandener Evidenzlinks sind noch nicht Teil dieser Oberfläche. Historische Handlungsrevisionen sind nur lesend. Die anschließende Bewertungsreife wird in Phase 3.2a separat hergestellt (siehe unten). Keine neue Evaluation, kein Bewertungssnapshot und keine produktive MethodologyVersion werden erzeugt. Bewertung folgt erst in Phase 3.2.
 
-Der bestätigte Ausgangsstand `9bd58e74e21cd4237bc75cd006efda06d028d3d2` hat laut externer Nutzerprüfung 139 erfolgreiche Tests und einen erfolgreichen nativen arm64-Build mit Apple Swift 6.1.2. Neu sind 6 AppModel- und 15 Persistence-Tests; erwartet werden 160 insgesamt (90 Core, 57 Persistence, 13 AppModel). Alle bisherigen Tests bleiben unverändert. Für diese Änderungen sind `swift --version`, `swift test` und `xcodebuild` lokal mit Exit 127 fehlgeschlagen (Tools fehlen). Neuer Compile-/Test-/App-Build-Nachweis steht aus; die unveränderte macOS-15-CI führt weiterhin zuerst Tests, dann den App-Build aus.
+Phase 3.1 ist inzwischen extern bestätigt: Commit `3a484a6261621dd21c94a023d6c0a0f403799147` hat laut Nutzerprüfung 160 erfolgreiche Tests (90 Core, 57 Persistence, 13 AppModel) und einen erfolgreichen nativen arm64-Build mit Apple Swift 6.1.2. Lokal fehlen Swift und Xcode weiterhin; die macOS-15-CI führt zuerst Tests, danach den App-Build aus.
+
+## Phase 3.2a: Bewertungsreife ohne Bewertung
+
+Der Versprechenbereich zeigt Kontext, Sprecher, jeweilige Prüfstatus und Fundstellen. Das Sheet „Prüfrahmen bestätigen“ verlangt konkreten Kontexttext und zwei ausdrückliche Fundstellenauswahlen (Kontext / Sprecher). Es zeigt ausschließlich verifizierte Excerpts mit verifizierter Quellenfassung des geladenen Cases. Der bestehende Sprecher bleibt derselbe Actor; Partei, Quellenherausgeber oder Affiliation erzeugen keine automatische Zuordnung.
+
+`CaseWorkspaceModel.verifyPromiseForEvaluationReadiness` ruft die neue atomare Store-Operation auf. Die pure Core-Operation `DomainChanges.verifyPromiseForReadiness` erzeugt eine neue PromiseRevision und bindet alle aktiven Kriterien als neue Draft-Revisionen an sie. Das geprüfte Originalzitat und alle unveränderten Felder bleiben exakt erhalten. Alte Promise-/Kriterienrevisionen bleiben lesbar, zuvor bestätigte Kriterien müssen mit „Kriterium bestätigen“ erneut geprüft werden. Vorhandene Evidenz verweist weiterhin auf die vorherigen Kriterienrevisionen; neue Zuordnungen müssen ausdrücklich erfasst und geprüft werden. Bei historischen CaseRevisions oder CaseEvaluations wird die direkte Neubindung vollständig blockiert.
+
+„Fall als geprüft markieren“ und „Zur Bewertung vorbereiten“ sind getrennte menschliche Aktionen. Fähigkeiten werden direkt über `DomainChanges.transition` ermittelt; der Store prüft denselben Übergang mit einem frischen Graphen. Draft-Kriterien oder unpassender Promise-Bezug verhindern Bewertungsreife. Der Abschnitt „Bewertungsreife“ zeigt Feldstatus, Anzahl aktiver/bestätigter/Draft-Kriterien und Workflow zur Orientierung; er ersetzt keine Core-Validierung. Es entsteht keine Evaluation und keine Bewertungskategorie. Der direkte Prüfrahmen-Vorgang wird nur im Zustand `documented` angeboten; Bearbeitung nach weiteren Meilensteinen und Neubewertung sind bewusst spätere Aufgaben.
+
+Extern bestätigter Ausgangsstand für diesen Schritt: `3a484a6261621dd21c94a023d6c0a0f403799147`, Apple Swift 6.1.2, 160 Tests erfolgreich und nativer arm64-Build erfolgreich. Neu: 16 Core-, 8 Persistence- und 6 AppModel-Tests, erwartet 190 insgesamt. Die bisherigen 160 Tests bleiben unverändert. Neue Tests prüfen Live-Fundstellen/Quellenfassungen, Kontext/Sprecher und Zitat-Erhaltung, Kriterienneubindung mit erneuter menschlicher Bestätigung, beide Workflowübergänge, historische Sperre, Rollback, Audit, echte temporäre Store-Wiederöffnung und die Abwesenheit erzeugter Bewertungen. Die reale Ausführung dieser Änderungen benötigt weiterhin die macOS-CI.
+
+Für Phase 3.2a endeten die tatsächlichen lokalen Versuche `swift --version`, `swift test` und `xcodebuild` mit Exit 127 (`command not found`). `git diff --check` ist erfolgreich; dies ersetzt keinen Compiler-/Testnachweis. Es wird kein neuer Build-Erfolg behauptet.

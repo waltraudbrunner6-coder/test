@@ -54,7 +54,16 @@ public enum WorkspaceErrorMessage {
         switch error {
         case .missingReference(let ref): return "Eine referenzierte Information fehlt (\(ref.kind))."
         case .duplicateReference(let ref): return "Eine Information ist doppelt verknüpft (\(ref.kind))."
-        case .relationshipMismatch(let ref): return "Die Verknüpfung passt fachlich nicht zusammen (\(ref.kind))."
+        case .relationshipMismatch(let ref):
+            switch ref.kind {
+            case .promiseRevision: return "Prüfe Originalzitat, Kontext und Sprecherzuordnung, bevor der Fall als geprüft markiert wird."
+            case .criterionRevision: return "Der Kriterienbezug passt nicht zur aktuellen PromiseRevision. Binde den Prüfrahmen neu und bestätige das Kriterium erneut."
+            default: return "Die Verknüpfung passt fachlich nicht zusammen (\(ref.kind))."
+            }
+        case .originalQuoteNotVerified: return "Prüfe zuerst das Originalzitat anhand einer geprüften Fundstelle."
+        case .speakerAssignmentUnavailable: return "Für die Sprecherprüfung fehlt ein vorhandener Sprecher-Akteur."
+        case .historicalReadinessChangeDenied: return "Dieser Fall besitzt bereits einen Bewertungssnapshot oder eine Bewertung. Die direkte Neubindung ist gesperrt; eine spätere Neubewertung benötigt einen eigenen Vorgang."
+        case .readinessRequiresDocumentedCase: return "Bestätige den Prüfrahmen eines dokumentierten Falls vor den weiteren Workflowübergängen."
         case .missingHumanReview: return "Für diese Verifikation ist eine menschliche Prüfung erforderlich."
         case .unknownVerifiedValue: return "Ein unbekannter oder nicht anwendbarer Wert darf nicht als verifiziert markiert sein."
         case .missingSourceIdentity: return "Die Quelle braucht eine URL oder Dokumentkennung."
@@ -65,7 +74,7 @@ public enum WorkspaceErrorMessage {
         case .excerptNotVerified(_): return "Die Fundstelle muss zuerst menschlich geprüft werden."
         case .sourceVersionNotVerified(_): return "Die Quellenfassung muss zuerst menschlich geprüft werden."
         case .missingCriteria: return "Lege mindestens ein Prüfkriterium an."
-        case .criterionNotConfirmed(_): return "Das Kriterium ist noch nicht menschlich bestätigt."
+        case .criterionNotConfirmed(_): return "Das Kriterium ist noch nicht menschlich bestätigt. Nach einer Neubindung muss es erneut bestätigt werden."
         case .weightWithoutJustification: return "Für die Gewichtung fehlt eine Begründung."
         case .snapshotMismatch: return "Die aktuelle Information stimmt nicht mit dem historischen Prüfstand überein."
         case .immutableContentChanged: return "Eine historische Revision ist unveränderlich. Lege eine neue Revision an."

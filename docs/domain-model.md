@@ -288,6 +288,14 @@ Materialitätsregel wird pro bestätigter CriterionRevision textlich begründet 
 - Ein Excerpt kann in mehreren Revisionen/Evaluationen wiederverwendet werden; sein Text bleibt unverändert. Neue Quellfassung erzeugt SourceVersion und bei Bedarf neue Excerpts.
 - Kein Cascade Delete für referenzierte historische Objekte. Lokale Aufbewahrung/Datenschutz kann eine explizite Löschung des ganzen Cases verlangen; das ist sichtbar zu protokollieren und die erwarteten Folgen für externe Dateien zu nennen.
 
+### Präzisierung für Phase 3.2a: Prüfrahmen vor erster Bewertung
+
+Die menschliche Kontext- und Sprecherprüfung eines `documented` Cases erzeugt eine neue PromiseRevision. Originalzitat einschließlich Prüfstatus, Fundstellen und ursprünglicher HumanReview sowie alle anderen unveränderten Felder werden exakt übernommen. Kontext und dieselbe bestehende Sprecher-Actor-ID erhalten ausdrücklich ausgewählte verifizierte Excerpts an verifizierten SourceVersions und einen menschlichen Prüfvermerk. Daraus folgt keine Parteiverifikation.
+
+Jede aktive CriterionRevision wird bei diesem Promise-Head-Wechsel mit gleicher Messlatte, neuer ID und erhöhter Revisionsnummer an die neue PromiseRevision gebunden. Auch zuvor bestätigte Kriterien beginnen wieder als `draft` ohne confirmation; der Mensch bestätigt die Eignung für den neuen Prüfrahmen separat. Alte Revisionen und deren Bestätigungen bleiben unverändert. Vorhandene EvidenceLinks und ResearchTasks behalten ihre bisherigen Kriterienreferenzen; es gibt keine automatische Neubindung von Evidenz.
+
+Dieser konkrete Vorgang ist auf den dokumentierten Fall vor der ersten Bewertung begrenzt und wird bei vorhandener CaseRevision oder CaseEvaluation desselben Cases vollständig blockiert. Nach erfolgreicher Prüfung folgen getrennte bestehende Core-Transitions `documented → verified → readyForEvaluation`. Bewertungsreife bedeutet einen stabilen menschlich geprüften Prüfrahmen, noch kein Urteil. In Phase 3.2a entsteht kein Bewertungssnapshot, keine Kriterien-/Gesamtbewertung und keine Methodikversion. Spätere Änderungen eines bereits fortgeschrittenen oder historisch bewerteten Falls benötigen einen eigenen Neubewertungsablauf.
+
 ## 7. Scope-Entscheidungen für SwiftData
 
 Ein einzelner lokaler Store genügt. Beziehungen werden über IDs/Referenzen und inverse Verknüpfungen modelliert; Snapshot-Manifest kann geordnete ID-Listen speichern. Große Dokumentdateien bleiben außerhalb SwiftData im verwalteten Application-Support-Speicher, Metadaten/Hashes liegen in SwiftData. Export als JSON-Paket enthält Manifest und benötigte lokale Quellen nur, soweit Nutzungsrechte dies erlauben.

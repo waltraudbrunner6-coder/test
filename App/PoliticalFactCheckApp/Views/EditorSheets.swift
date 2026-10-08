@@ -451,3 +451,62 @@ extension ActionType {
         }
     }
 }
+
+struct PromiseReadinessSheet: View {
+    @EnvironmentObject private var workspace: CaseWorkspaceModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var contextText = ""
+    @State private var contextExcerpts: Set<EntityID<SourceExcerpt>> = []
+    @State private var speakerExcerpts: Set<EntityID<SourceExcerpt>> = []
+
+    var body: some View {
+        ScrollView {
+            Form {
+                Text("Prüfrahmen bestätigen").font(.headline)
+                TextField("Konkreter Kontext", text: $contextText, axis: .vertical).lineLimit(3...6)
+                contextSelection
+                speakerSelection
+                Text("Die Prüfung erzeugt eine neue PromiseRevision. Alle aktiven Kriterien werden neu angebunden und müssen erneut menschlich bestätigt werden. Vorhandene Evidenz bleibt an ihrer bisherigen Kriterienrevision; sie wird nicht automatisch neu zugeordnet.")
+                    .font(.caption).foregroundStyle(.secondary)
+                WorkspaceFormError()
+                HStack {
+                    Button("Abbrechen") { dismiss() }
+                    Spacer()
+                    Button("Kontext und Sprecher menschlich bestätigen", action: confirm)
+                        .disabled(contextText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || contextExcerpts.isEmpty || speakerExcerpts.isEmpty)
+                }
+            }.padding(20)
+        }.frame(width: 640, height: 660)
+        .onAppear {
+            if let graph = workspace.selectedContext, let politicalCase = workspace.selectedCase {
+                contextText = graph.find(politicalCase.currentPromiseRevisionID)?.context.content.knownValue?.value ?? ""
+            }
+        }
+    }
+
+    @ViewBuilder private var contextSelection: some View {
+        if let graph = workspace.selectedContext {
+            Text("Fundstellen für den Kontext").font(.headline)
+            ExcerptSelection(graph: graph, options: workspace.verifiedExcerpts, selected: $contextExcerpts)
+        }
+    }
+
+    @ViewBuilder private var speakerSelection: some View {
+        if let graph = workspace.selectedContext, let politicalCase = workspace.selectedCase,
+           let revision = graph.find(politicalCase.currentPromiseRevisionID),
+           let id = revision.speaker.content.knownValue, let actor = graph.find(id) {
+            Text("Sprecherzuordnung: \(actor.name.value)").font(.headline)
+            Text("Wähle ausdrücklich die Fundstellen, die diesen bestehenden Sprecher belegen. Die Partei wird damit nicht verifiziert.")
+                .font(.caption).foregroundStyle(.secondary)
+            ExcerptSelection(graph: graph, options: workspace.verifiedExcerpts, selected: $speakerExcerpts)
+        } else {
+            Text("Kein bestehender Sprecher-Akteur verfügbar.").foregroundStyle(.red)
+        }
+    }
+
+    private func confirm() {
+        if workspace.verifyPromiseForEvaluationReadiness(contextText: contextText,
+            contextExcerptIDs: orderedExcerpts(contextExcerpts, in: workspace.selectedContext),
+            speakerExcerptIDs: orderedExcerpts(speakerExcerpts, in: workspace.selectedContext)) { dismiss() }
+    }
+}
