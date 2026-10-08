@@ -83,3 +83,12 @@ ReviewRequired blockiert neue Entwürfe, Satzprüfung und Freigabe. Historische 
 Keine echte KI, Recherche, API-/Netzwerk-, Keychain-, Export- oder Medienfunktion. Der Fake kopiert bereitgestellte Texte ohne journalistische Schlussfolgerung oder gemessene Sprechdauer. Echter Provideradapter folgt in Phase 4.2. Die bestehenden 244 Tests und der CI-Ablauf bleiben unverändert; für Phase 4.1 werden neue Tests ergänzt. Ohne erfolgreiches eigenes CI-Ergebnis gilt SCRIPT WORKFLOW AWAITING CI VERIFICATION.
 
 Prüfstand Phase 4.1: 59 neue Tests (6 Core, 24 Scripting, 21 Persistence, 8 AppModel), erwartet **303 insgesamt**. Alle 244 bisherigen Tests bleiben unverändert. Lokale Aufrufe von swift --version, swift test und xcodebuild enden mit Exit 127 (command not found); GitHub-Actions-Abruf liefert Forbidden. git diff --check ist erfolgreich, aber kein Compiler-/Testnachweis. Der unveränderte Workflow führt nach Push auf main zuerst swift test und anschließend den nativen arm64-App-Build aus; Ergebnis extern zu prüfen.
+
+
+## Phase 4.2: explizite OpenAI-Übertragung
+
+Die normale Skriptaktion öffnet „An OpenAI übertragene Daten“ mit Modell, Zielzeit, Kategorie, Mengen und vollständigem, auswählbarem JSON-Nutzdatentext einschließlich Originalversprechen, Kriterien, Fundstellen/Locators und Unsicherheiten. Erst „An OpenAI senden“ sendet; Abbrechen bleibt lokal. Die Hinweise benennen die externe Übertragung und den ungeprüften Entwurf ausdrücklich. Kein Schlüsselfeld, Modellpicker oder automatische Recherche. Fehlender OPENAI_API_KEY blockiert nur die Provideraktion, nicht manuelle Skripte. Der Fake bleibt ausschließlich als klar beschriftete Debug-Aktion und in Tests.
+
+Frisch geladener Fall, approved-Status, Snapshotinput und lokaler Änderungstoken werden vor dem Senden geprüft. Relevante Änderung verlangt neue Vorschau; wiederholbare Providerfehler erhalten sie. Busy-Flag, deaktivierte Send-/Abbrechen-Buttons und ProgressView verhindern parallele Requests. Erfolg zeigt neue Version als „KI-Entwurf – ungeprüft“; bestehende Satzprüfung/Freigabe bleiben unverändert. Keine automatische HumanReview oder politische Neubewertung.
+
+Technische Einzelheiten, Key-Umgebung, Datenschutzgrenzen und Promptversion stehen in openai-integration.md. Phase-4.1-Basis ist extern mit 303 Tests/BUILD SUCCEEDED bestätigt. Neu: 67 Offline-Tests, erwartet 370 insgesamt; neuer macOS-Test-/Buildnachweis ausstehend. UI-Interaktionen sind nicht durch einen automatisierten UI-Test nachgewiesen.

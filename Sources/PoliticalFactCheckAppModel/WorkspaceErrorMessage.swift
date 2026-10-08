@@ -31,6 +31,7 @@ public enum WorkspaceErrorMessage {
             case .storage(let operation, let detail): return "Speicherfehler bei \(operation): \(detail)"
             }
         }
+        if let error = error as? OpenAIProviderError { return describe(error) }
         if let error = error as? ScriptGenerationError { return describe(error) }
         if let error = error as? DomainValidationError { return describe(error) }
         if let error = error as? WorkspaceInputError {
@@ -51,6 +52,25 @@ public enum WorkspaceErrorMessage {
             }
         }
         return "Die Änderung konnte nicht gespeichert werden. Details: \(String(describing: error))"
+    }
+
+    private static func describe(_ error: OpenAIProviderError) -> String {
+        switch error {
+        case .missingAPIKey: return "OpenAI API key is not configured. Setze OPENAI_API_KEY ausschließlich in deiner lokalen Entwicklungsumgebung."
+        case .invalidRequest: return "OpenAI konnte die Anfrage nicht verarbeiten. Prüfe die lokale Modellkonfiguration."
+        case .authenticationFailed: return "OpenAI-Authentifizierung fehlgeschlagen. Prüfe den lokal gesetzten API-Key."
+        case .permissionDenied: return "Keine Berechtigung für die OpenAI-Anfrage oder das konfigurierte Modell."
+        case .rateLimited: return "OpenAI-Limit erreicht. Bitte später erneut versuchen."
+        case .serviceUnavailable: return "OpenAI ist vorübergehend nicht verfügbar. Bitte später erneut versuchen."
+        case .networkFailure: return "Die Verbindung zu OpenAI ist fehlgeschlagen. Es wurde kein Entwurf gespeichert."
+        case .timeout: return "Die OpenAI-Anfrage hat zu lange gedauert. Bitte erneut versuchen."
+        case .malformedResponse: return "OpenAI hat eine ungültige Antwort geliefert. Es wurde kein Entwurf gespeichert."
+        case .structuredOutputMissing: return "In der OpenAI-Antwort fehlt der strukturierte Skriptentwurf."
+        case .refused: return "Das Modell hat die Anfrage nicht ausgeführt."
+        case .incompleteResponse: return "Die OpenAI-Antwort ist unvollständig. Es wurde kein Teilentwurf gespeichert."
+        case .invalidProviderReferences: return "Der KI-Entwurf enthält ungültige Referenzen oder Tatsachensätze ohne geprüfte Fundstelle. Er wurde nicht gespeichert."
+        case .previewChanged: return "Der Fall oder die Vorschau hat sich geändert. Öffne die Übertragungsvorschau erneut."
+        }
     }
 
     private static func describe(_ error: ScriptGenerationError) -> String {

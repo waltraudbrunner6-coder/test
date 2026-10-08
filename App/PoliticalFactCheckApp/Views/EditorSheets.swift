@@ -884,3 +884,45 @@ struct ManualScriptSheet: View {
         if workspace.createManualScript(evaluationID: evaluationID, output: output, targetDurationSeconds: target) != nil { dismiss() }
     }
 }
+
+struct OpenAITransmissionSheet: View {
+    @EnvironmentObject private var workspace: CaseWorkspaceModel
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("An OpenAI übertragene Daten").font(.title2)
+            Text("Die angezeigten Auszüge werden zur Skripterstellung an OpenAI übertragen.")
+            Text("Die KI-Ausgabe ist ein ungeprüfter Entwurf und verändert die freigegebene Bewertung nicht.").font(.caption)
+            Text("Nur Daten des freigegebenen Snapshots. Keine Recherche, keine Tools.").font(.caption)
+            transmissionContent
+            if let error = workspace.errorMessage { Text(error).foregroundStyle(.red) }
+            if workspace.isGeneratingScript { ProgressView("OpenAI erstellt den ungeprüften Entwurf …") }
+            HStack {
+                Button("Abbrechen") { workspace.dismissOpenAIPreview(); dismiss() }.disabled(workspace.isGeneratingScript)
+                Spacer()
+                Button("An OpenAI senden") {
+                    Task { if await workspace.sendOpenAIScript() != nil { dismiss() } }
+                }.disabled(workspace.isGeneratingScript || workspace.openAITransmissionPreview == nil)
+            }
+        }.padding(20).frame(width: 720, height: 650)
+        .interactiveDismissDisabled(workspace.isGeneratingScript)
+        .onDisappear { workspace.dismissOpenAIPreview() }
+    }
+    @ViewBuilder private var transmissionContent: some View {
+        if let preview = workspace.openAITransmissionPreview {
+            LabeledContent("Modell", value: preview.configuration.model)
+            LabeledContent("Zielzeit", value: "\(Int(preview.input.targetDurationSeconds)) Sekunden")
+            LabeledContent("Bewertung", value: preview.input.evaluation.category.manualLabel)
+            LabeledContent("Kriterien / EvidenceLinks / Fundstellen",
+                value: "\(preview.input.criteria.count) / \(preview.input.evidence.count) / \(preview.input.excerpts.count)")
+            Text("Vollständige Nutzdaten: Originalversprechen, Bewertung, Kriterien, Quellen/Locators und Unsicherheiten. Dieser Text wird unverändert gesendet.").font(.caption)
+            ScrollView {
+                Text(preview.contentJSON).font(.system(.caption, design: .monospaced))
+                    .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+            }
+        } else {
+            Text("Die Vorschau ist nicht mehr gültig. Schließe das Fenster und öffne sie erneut.").foregroundStyle(.orange)
+            Spacer()
+        }
+    }
+}

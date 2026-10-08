@@ -100,3 +100,12 @@ Das Persistence-Target hängt zusätzlich vom netzwerkfreien Transfer-/Validieru
 Delete Rules und historische Löschsperren bleiben unverändert. Grenzen: ein lokaler Writer; keine freien Änderungen historischer IDs, Ersatzbewertung oder gemessene Sprechdauer. Referenzprüfung kann Wahrheit und Belegtragfähigkeit nicht ersetzen. Schema-Migration ist für diese Operationen nicht erforderlich. Ausschließlich synthetische Roundtrip-/Rollback-/Reviewtests; der neue reale macOS-CI-Nachweis steht separat aus.
 
 Prüfstand Phase 4.1: 59 neue Tests (6 Core, 24 Scripting, 21 Persistence, 8 AppModel), erwartet **303 insgesamt**. Alle 244 bisherigen Tests bleiben unverändert. Lokale Aufrufe von swift --version, swift test und xcodebuild enden mit Exit 127 (command not found); GitHub-Actions-Abruf liefert Forbidden. git diff --check ist erfolgreich, aber kein Compiler-/Testnachweis. Der unveränderte Workflow führt nach Push auf main zuerst swift test und anschließend den nativen arm64-App-Build aus; Ergebnis extern zu prüfen.
+
+
+## Phase 4.2: lokaler Vorschau-Änderungstoken
+
+`scriptGenerationChangeToken` lädt den Fall frisch, kodiert den bestehenden CaseGraphDTO mit sortierten JSON-Schlüsseln und berechnet SHA-256. Der Token bleibt flüchtig im AppModel und wird weder persistiert noch an OpenAI gesendet. Er ist ausschließlich ein konservativer Änderungssensor für die Übertragungsvorschau, keine fachliche Revision, Snapshot-ID oder Sicherheitssignatur. Auch Änderungen außerhalb des Snapshots machen eine offene Vorschau ungültig. Ein lokaler Writer bleibt Voraussetzung.
+
+Die bestehenden atomaren Skriptoperationen, DTOs, Domain-Regeln, historischen Snapshots, Delete Rules, Schema 1.0.0 und Payload-Format 1 bleiben unverändert. Providerresultate gelangen ausschließlich über saveGeneratedScriptDraft in den Store; dieser lädt erneut und prüft approved sowie den vollständigen Output. Neue Draft-/Satz-IDs und Audits entstehen gemeinsam, kein Teilergebnis. Keine Credentials, HTTP-Payloads, Authorization, Response-IDs oder Usage-Werte werden gespeichert. Die zufällige nicht personenbezogene safety_identifier-UUID liegt separat in lokalen UserDefaults und ist keine ReviewerIdentity.
+
+Drei neue Persistence-Tests prüfen Token-Stabilität über frische Contexts, Änderung durch eine neue Skriptversion bei unverändertem Snapshot sowie getrennte Provider-/Requester-Herkunft ohne Credentials. Zusammen mit 47 Scripting- und 17 AppModel-Tests werden 370 Tests erwartet; die bisherige Basis mit 303 Tests ist extern bestätigt, neue reale macOS-Ausführung steht aus.

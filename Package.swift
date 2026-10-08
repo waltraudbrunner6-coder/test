@@ -5,7 +5,7 @@ var products: [Product] = [.library(name: "PoliticalFactCheckCore", targets: ["P
 products.append(.library(name: "PoliticalFactCheckScripting", targets: ["PoliticalFactCheckScripting"]))
 var targets: [Target] = [
     .target(name: "PoliticalFactCheckCore"),
-    .target(name: "PoliticalFactCheckScripting", dependencies: ["PoliticalFactCheckCore"]),
+    .target(name: "PoliticalFactCheckScripting", dependencies: ["PoliticalFactCheckCore"], resources: [.process("Resources")]),
     .testTarget(name: "PoliticalFactCheckScriptingTests", dependencies: ["PoliticalFactCheckCore", "PoliticalFactCheckScripting"]),
     .testTarget(name: "PoliticalFactCheckCoreTests", dependencies: ["PoliticalFactCheckCore"])
 ]

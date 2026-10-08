@@ -17,6 +17,10 @@ public final class CaseWorkspaceModel: ObservableObject {
     }
 
     @Published public private(set) var isGeneratingScript = false
+    @Published public private(set) var openAITransmissionPreview: OpenAITransmissionPreview?
+    private var openAIPreviewCaseID: EntityID<PoliticalFactCheckCore.Case>?
+    private var openAIPreviewChangeToken: String?
+
 
     private static let reviewerNameKey = "politicalFactCheck.reviewerName"
     private static let reviewerIDKey = "politicalFactCheck.reviewerID"
@@ -590,6 +594,72 @@ public final class CaseWorkspaceModel: ObservableObject {
             throw WorkspaceInputError.caseUnavailable
         }
         return try ScriptInputBuilder.build(evaluationID: evaluationID, targetDurationSeconds: targetDurationSeconds, in: graph)
+    }
+
+    /// Preparing a preview is strictly local: no provider, key lookup or network invocation.
+    @discardableResult
+    public func prepareOpenAIPreview(evaluationID: EntityID<CaseEvaluation>, targetDurationSeconds: Double = 45,
+                                    configuration: OpenAIScriptProviderConfiguration = .init()) -> Bool {
+        guard !isGeneratingScript else { present(ScriptGenerationError.generationInProgress); return false }
+        dismissOpenAIPreview()
+        do {
+            guard let store, let caseID = selectedCaseID else { throw WorkspaceInputError.caseUnavailable }
+            let input = try scriptInput(evaluationID: evaluationID, targetDurationSeconds: targetDurationSeconds)
+            let preview = try OpenAITransmissionPreview.make(input: input, configuration: configuration)
+            openAIPreviewChangeToken = try store.scriptGenerationChangeToken(caseID: caseID)
+            openAIPreviewCaseID = caseID
+            openAITransmissionPreview = preview
+            errorMessage = nil
+            return true
+        } catch { present(error); return false }
+    }
+
+    public func dismissOpenAIPreview() {
+        guard !isGeneratingScript else { return }
+        openAITransmissionPreview = nil; openAIPreviewCaseID = nil; openAIPreviewChangeToken = nil
+    }
+
+    public var openAISafetyIdentifier: String {
+        let key = "politicalFactCheck.openAISafetyIdentifier"
+        if let existing = defaults.string(forKey: key), UUID(uuidString: existing) != nil { return existing }
+        let value = UUID().uuidString
+        defaults.set(value, forKey: key)
+        return value
+    }
+
+    /// The UI calls this only from the explicit Send action. It rechecks a fresh graph before networking.
+    @discardableResult
+    public func sendOpenAIScript(provider injected: OpenAIScriptGenerationProvider? = nil) async -> EntityID<ScriptDraft>? {
+        guard !isGeneratingScript else { present(ScriptGenerationError.generationInProgress); return nil }
+        guard let preview = openAITransmissionPreview, let caseID = openAIPreviewCaseID,
+              let token = openAIPreviewChangeToken else { present(OpenAIProviderError.previewChanged); return nil }
+        isGeneratingScript = true
+        defer { isGeneratingScript = false }
+        do {
+            guard let store, selectedCaseID == caseID else { throw OpenAIProviderError.previewChanged }
+            let reviewer = try currentReviewer()
+            let input = try scriptInput(evaluationID: preview.input.evaluation.id, targetDurationSeconds: preview.input.targetDurationSeconds)
+            guard try store.scriptGenerationChangeToken(caseID: caseID) == token, input == preview.input else {
+                throw OpenAIProviderError.previewChanged
+            }
+            let provider = injected ?? OpenAIScriptGenerationProvider(configuration: preview.configuration,
+                safetyIdentifier: openAISafetyIdentifier)
+            guard provider.configuration == preview.configuration else { throw OpenAIProviderError.previewChanged }
+            let output = try await provider.generateScript(input: input)
+            try Task.checkCancellation()
+            let script = try store.saveGeneratedScriptDraft(caseID: caseID, evaluationID: input.evaluation.id,
+                output: output, targetDurationSeconds: input.targetDurationSeconds,
+                providerIdentifier: provider.identifier, reviewer: reviewer, at: Date())
+            openAITransmissionPreview = nil; openAIPreviewCaseID = nil; openAIPreviewChangeToken = nil
+            reload(selecting: caseID)
+            return script.id
+        } catch {
+            // Only changed previews are invalidated; recoverable provider errors retain the exact input for retry.
+            if error is ScriptGenerationError || (error as? OpenAIProviderError) == .previewChanged {
+                openAITransmissionPreview = nil; openAIPreviewCaseID = nil; openAIPreviewChangeToken = nil
+            }
+            present(error); return nil
+        }
     }
 
     @discardableResult

@@ -50,7 +50,7 @@ struct CaseDetailView: View {
 
     private var scriptSection: some View {
         section("Skript", systemImage: "text.alignleft") {
-            Text("Lokaler Test-Provider – keine echte KI").font(.subheadline).foregroundStyle(.secondary)
+            Text("KI-Entwürfe werden erst nach Übertragungsvorschau gesendet und bleiben ungeprüft.").font(.subheadline).foregroundStyle(.secondary)
             Text("Zielzeit ist ein Planwert; keine gemessene Sprechdauer.").font(.caption)
             Stepper("Zielzeit: \(Int(scriptTargetSeconds)) Sekunden", value: $scriptTargetSeconds, in: 30...60, step: 5)
             ForEach(evaluations, id: \.id) { evaluation in
@@ -67,11 +67,18 @@ struct CaseDetailView: View {
     @ViewBuilder private func scriptGenerationActions(_ evaluation: CaseEvaluation) -> some View {
         if evaluation.status == .approved {
             HStack {
-                Button("Skriptentwurf erzeugen") {
-                    Task { await workspace.generateScript(evaluationID: evaluation.id, targetDurationSeconds: scriptTargetSeconds) }
+                Button("KI-Skriptentwurf erzeugen") {
+                    if workspace.prepareOpenAIPreview(evaluationID: evaluation.id, targetDurationSeconds: scriptTargetSeconds) {
+                        sheet = .openAITransmission
+                    }
                 }.disabled(workspace.isGeneratingScript)
                 Button("Manuellen Entwurf anlegen") { sheet = .manualScript(evaluation.id, nil) }
             }
+            #if DEBUG
+            Button("Lokaler Test-Provider – keine echte KI") {
+                Task { await workspace.generateScript(evaluationID: evaluation.id, targetDurationSeconds: scriptTargetSeconds) }
+            }.disabled(workspace.isGeneratingScript)
+            #endif
         } else if evaluation.status == .reviewRequired {
             Text("Bewertung muss erneut geprüft werden").foregroundStyle(.orange)
         }
@@ -83,6 +90,9 @@ struct CaseDetailView: View {
             Text("Zielzeit: \(Int(script.targetDurationSeconds)) Sekunden · \(script.createdAt.formatted())").font(.caption)
             Text("Evaluation: \(script.caseEvaluationID.rawValue.uuidString)").font(.caption).textSelection(.enabled)
             Text(scriptAuthor(script.author)).font(.caption)
+            if case .ai(let provider, _) = script.author, script.status == .draft, !provider.value.hasPrefix("local-test") {
+                Text("KI-Entwurf – ungeprüft").foregroundStyle(.orange)
+            }
             if let review = script.approval {
                 Text("Historisch freigegeben: \(graph.find(review.reviewerID)?.displayName.value ?? "Reviewer fehlt") · \(review.reviewedAt.formatted())").font(.caption)
             }
@@ -153,7 +163,7 @@ struct CaseDetailView: View {
     private func scriptAuthor(_ author: Authorship) -> String {
         switch author {
         case .human(let id): return "Manuell: \(graph.find(id)?.displayName.value ?? "Reviewer fehlt")"
-        case .ai(let model, _): return "Provider-Herkunft (ungeprüfter Entwurf): \(model.value)"
+        case .ai(let model, _): return "KI-/Provider-Herkunft: \(model.value)"
         case .system: return "System-Herkunft"
         }
     }

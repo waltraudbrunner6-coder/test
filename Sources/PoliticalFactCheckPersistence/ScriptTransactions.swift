@@ -1,9 +1,18 @@
 import Foundation
+import CryptoKit
 import SwiftData
 import PoliticalFactCheckCore
 import PoliticalFactCheckScripting
 
 extension LocalCaseStore {
+    /// Local-only change token. The digest, graph and audits are never part of the provider request.
+    public func scriptGenerationChangeToken(caseID: EntityID<Case>) throws -> String {
+        guard let graph = try loadCase(id: caseID) else { throw PersistenceError.missingEntity(kind: "Case", id: caseID.rawValue) }
+        let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
+        let bytes = try encoder.encode(CaseGraphDTO(graph))
+        return SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
+    }
+
     /// Rebuild the input after the async provider returns: stale output cannot bypass a new review request.
     @discardableResult
     public func saveGeneratedScriptDraft(caseID: EntityID<Case>, evaluationID: EntityID<CaseEvaluation>,

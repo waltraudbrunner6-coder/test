@@ -79,6 +79,8 @@ struct MainWindowView: View {
             PromiseReadinessSheet()
         case .manualEvaluation:
             ManualEvaluationSheet()
+        case .openAITransmission:
+            OpenAITransmissionSheet()
         case .manualScript(let evaluationID, let sourceID):
             ManualScriptSheet(evaluationID: evaluationID, sourceID: sourceID)
         case .reviewer:
@@ -89,6 +91,7 @@ struct MainWindowView: View {
 
 enum EditorSheet: Identifiable {
     case newCase, newCriterion, newSource, reviewer, newAction, newEvidence, promiseReadiness, manualEvaluation
+    case openAITransmission
     case manualScript(EntityID<CaseEvaluation>, EntityID<ScriptDraft>?)
     case reviewAction(EntityID<ActionRevision>)
     var id: String {
@@ -101,6 +104,7 @@ enum EditorSheet: Identifiable {
         case .newEvidence: "newEvidence"
         case .promiseReadiness: "promiseReadiness"
         case .manualEvaluation: "manualEvaluation"
+        case .openAITransmission: "openAITransmission"
         case .manualScript(let id, let source): "script-\(id.rawValue)-\(source?.rawValue.uuidString ?? "new")"
         case .reviewAction(let id): "reviewAction-\(id.rawValue.uuidString)"
         }
