@@ -122,3 +122,9 @@ Lokale Anhänge, Secrets und Netzwerkstate sind nicht transportierbar. Paketimpo
 Prüfstand Phase 4.3: 85 neue Tests, erwartet 455 insgesamt (139 Core, 71 Scripting, 119 Persistence, 60 AppModel, 66 Export). Alle bisherigen 370 Testdateien unverändert. Lokal Swift/Xcode Exit 127; GitHub-Actions-Abfrage Forbidden. git diff --check erfolgreich. Neuer CI-Test-/Buildnachweis ausstehend; Workflow unverändert.
 
 Die gestagte Diff-Prüfung meldet ausschließlich die absichtlich bytegleich kopierte abschließende Leerzeile der kanonischen Methodikressource. Alle übrigen Dateien bestehen git diff --cached --check. Die Ressource wird wegen ihres eingefrorenen SHA-256 nicht getrimmt.
+
+## Phase 4.4: Cross-Layer-Abnahme
+
+Persistenzcode, Schema, Mapping und Transaktionsregeln bleiben unverändert. Acht zusätzliche AppModel-Abnahmetests verwenden öffentliche Operationen von einem leeren temporären On-Disk-Store aus. Alte Workspace-/Store-Instanzen werden vor Wiederöffnung desselben Storepfads freigegeben; nach Bewertungsfreigabe, Skriptfreigabe und frischem Paketimport wird der volle Graph erneut geladen und validiert. PortableCaseArchiveV1-Gleichheit umfasst alle IDs, Revisionen, Snapshots, Reviews und Audits; ReviewRequired bleibt historisch/operativ getrennt. Export-/Providerfehler dürfen den gespeicherten Graphen nicht ändern, fehlgeschlagener Import darf keinen Teilfall hinterlassen.
+
+Extern bestätigte Basis df027bafca4da0d84cebe90f113f349344f93966: 455 erfolgreiche Tests und nativer arm64-Build, Apple Swift 6.1.2. Erwartet mit Phase 4.4 **463 Tests**; lokale Swift-/Xcode-Ausführung weiterhin nicht möglich. Neuer macOS-CI-Nachweis ausstehend. Keine erfolgreiche Ausführung der neuen Tests behauptet. Checklisten und Grenzen: mvp-acceptance.md / mvp-real-case-acceptance.md.

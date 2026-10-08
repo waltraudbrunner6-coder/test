@@ -105,3 +105,9 @@ Das Paket repräsentiert einen historischen geprüften Stand, erzeugt keine poli
 Prüfstand Phase 4.3: 85 neue Tests, erwartet 455 insgesamt (139 Core, 71 Scripting, 119 Persistence, 60 AppModel, 66 Export). Alle bisherigen 370 Testdateien unverändert. Lokal Swift/Xcode Exit 127; GitHub-Actions-Abfrage Forbidden. git diff --check erfolgreich. Neuer CI-Test-/Buildnachweis ausstehend; Workflow unverändert.
 
 Die gestagte Diff-Prüfung meldet ausschließlich die absichtlich bytegleich kopierte abschließende Leerzeile der kanonischen Methodikressource. Alle übrigen Dateien bestehen git diff --cached --check. Die Ressource wird wegen ihres eingefrorenen SHA-256 nicht getrimmt.
+
+## Phase 4.4: Stabilisierung und Abnahme
+
+Die Basis df027bafca4da0d84cebe90f113f349344f93966 ist extern mit 455 erfolgreichen Tests und erfolgreichem nativen arm64-Build bestätigt. Acht neue AppModel-Cross-Layer-Tests starten ohne Seed im temporären lokalen Store und bedienen die vorhandenen produktiven Aktionen bis Export/Import. Erwartet 463 Tests; neuer CI-Nachweis ausstehend. Technische Kriterien und manuelle reale Fallabnahme stehen in mvp-acceptance.md und mvp-real-case-acceptance.md. Native Panels und SwiftUI-Interaktionen bleiben manuell am Mac zu prüfen.
+
+Konkrete UX-Korrekturen: Prüfername direkt im ersten Fallformular; bestehende WorkspaceFormError-Anzeige auch in Fall-, Kriterium- und Quellendialogen, damit Blocker nicht hinter dem Sheet verborgen bleiben. Skript-Ladefehler verwenden WorkspaceErrorMessage statt roher Fehlerinterpolation. Keine neue Domain-/Workflowlogik. Überblick und Bewertungsreife bleiben informative Ableitungen; keine zusätzliche Fortschritts-State-Machine. Die menschliche Abnahmevorlage enthält keine reale Partei oder Aussage.

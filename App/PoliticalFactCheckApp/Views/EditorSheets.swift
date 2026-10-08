@@ -15,6 +15,7 @@ struct NewCaseSheet: View {
 
     var body: some View {
         Form {
+            TextField("Prüfername", text: $workspace.reviewerName)
             TextField("Arbeitstitel", text: $title)
             TextField("Sprechername", text: $speaker)
             TextField("Partei / Organisation", text: $party)
@@ -24,6 +25,7 @@ struct NewCaseSheet: View {
             Text("Alle Angaben beginnen ungeprüft. Für eine Fundstelle kannst du nach dem Anlegen eine Quelle erfassen.")
                 .font(.caption).foregroundStyle(.secondary)
             if let dateError { Text(dateError).foregroundStyle(.red) }
+            WorkspaceFormError()
             HStack {
                 Button("Abbrechen") { dismiss() }
                 Spacer()
@@ -70,6 +72,7 @@ struct NewCriterionSheet: View {
             Text("Das Kriterium wird als Draft gespeichert und muss vor einer Bewertung menschlich bestätigt werden.")
                 .font(.caption).foregroundStyle(.secondary)
             if let validationMessage { Text(validationMessage).foregroundStyle(.red) }
+            WorkspaceFormError()
             HStack {
                 Button("Abbrechen") { dismiss() }
                 Spacer()
@@ -117,6 +120,7 @@ struct NewSourceSheet: View {
             Text("Die URL wird nur gespeichert; es erfolgt kein Abruf. Neue Fundstellen beginnen ungeprüft.")
                 .font(.caption).foregroundStyle(.secondary)
             if let validationMessage { Text(validationMessage).foregroundStyle(.red) }
+            WorkspaceFormError()
             HStack {
                 Button("Abbrechen") { dismiss() }
                 Spacer()
@@ -868,7 +872,7 @@ struct ManualScriptSheet: View {
                     excerptKeys: ex.joined(separator: ", "), evidenceKeys: ev.joined(separator: ", "),
                     uncertainty: statement.uncertainty?.value ?? "")
             }
-        } catch { input = nil; message = "Der freigegebene Snapshot oder die Skriptreferenzen konnten nicht geladen werden: \(error)" }
+        } catch { input = nil; message = WorkspaceErrorMessage.describe(error) }
     }
 
     private func keys(_ text: String) -> [String] {
