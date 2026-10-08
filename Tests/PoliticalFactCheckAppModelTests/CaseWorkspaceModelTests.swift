@@ -1,7 +1,7 @@
 import Foundation
 import XCTest
 import PoliticalFactCheckCore
-import PoliticalFactCheckPersistence
+@testable import PoliticalFactCheckPersistence
 @testable import PoliticalFactCheckAppModel
 
 final class CaseWorkspaceModelTests: XCTestCase {
