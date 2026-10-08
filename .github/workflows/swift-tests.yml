@@ -16,3 +16,5 @@ jobs:
         run: swift --version
       - name: Compile and run domain and persistence tests
         run: swift test
+      - name: Build native macOS app
+        run: xcodebuild -project PoliticalFactCheckApp.xcodeproj -scheme PoliticalFactCheckApp -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO build

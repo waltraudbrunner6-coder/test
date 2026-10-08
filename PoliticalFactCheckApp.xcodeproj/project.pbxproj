@@ -1,0 +1,78 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {};
+	objectVersion = 60;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A10000000000000000000001 /* PoliticalFactCheckApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* PoliticalFactCheckApp.swift */; };
+		A10000000000000000000002 /* MainWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000002 /* MainWindowView.swift */; };
+		A10000000000000000000003 /* CaseDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000003 /* CaseDetailView.swift */; };
+		A10000000000000000000004 /* EditorSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000004 /* EditorSheets.swift */; };
+		A10000000000000000000011 /* PoliticalFactCheckCore in Frameworks */ = {isa = PBXBuildFile; productRef = AB000000000000000000001 /* PoliticalFactCheckCore */; };
+		A10000000000000000000012 /* PoliticalFactCheckPersistence in Frameworks */ = {isa = PBXBuildFile; productRef = AB000000000000000000002 /* PoliticalFactCheckPersistence */; };
+		A10000000000000000000013 /* PoliticalFactCheckAppModel in Frameworks */ = {isa = PBXBuildFile; productRef = AB000000000000000000003 /* PoliticalFactCheckAppModel */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		A20000000000000000000001 /* PoliticalFactCheckApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoliticalFactCheckApp.swift; sourceTree = "<group>"; };
+		A20000000000000000000002 /* MainWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindowView.swift; sourceTree = "<group>"; };
+		A20000000000000000000003 /* CaseDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaseDetailView.swift; sourceTree = "<group>"; };
+		A20000000000000000000004 /* EditorSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorSheets.swift; sourceTree = "<group>"; };
+		A30000000000000000000001 /* PoliticalFactCheckApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PoliticalFactCheckApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A40000000000000000000001 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000011 /* PoliticalFactCheckCore in Frameworks */, A10000000000000000000012 /* PoliticalFactCheckPersistence in Frameworks */, A10000000000000000000013 /* PoliticalFactCheckAppModel in Frameworks */,); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A50000000000000000000001 = {isa = PBXGroup; children = (A50000000000000000000002 /* App */, A50000000000000000000003 /* Products */); sourceTree = "<group>"; };
+		A50000000000000000000002 /* App */ = {isa = PBXGroup; children = (A50000000000000000000004 /* PoliticalFactCheckApp */,); path = App; sourceTree = "<group>"; };
+		A50000000000000000000004 /* PoliticalFactCheckApp */ = {isa = PBXGroup; children = (A50000000000000000000005 /* App */, A50000000000000000000006 /* Views */); path = PoliticalFactCheckApp; sourceTree = "<group>"; };
+		A50000000000000000000005 /* App */ = {isa = PBXGroup; children = (A20000000000000000000001 /* PoliticalFactCheckApp.swift */,); path = App; sourceTree = "<group>"; };
+		A50000000000000000000006 /* Views */ = {isa = PBXGroup; children = (A20000000000000000000002 /* MainWindowView.swift */, A20000000000000000000003 /* CaseDetailView.swift */, A20000000000000000000004 /* EditorSheets.swift */); path = Views; sourceTree = "<group>"; };
+		A50000000000000000000003 /* Products */ = {isa = PBXGroup; children = (A30000000000000000000001 /* PoliticalFactCheckApp.app */,); name = Products; sourceTree = "<group>"; };
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A60000000000000000000001 /* PoliticalFactCheckApp */ = {isa = PBXNativeTarget; buildConfigurationList = A90000000000000000000002 /* Build configuration list for PBXNativeTarget "PoliticalFactCheckApp" */; buildPhases = (A70000000000000000000001 /* Sources */, A40000000000000000000001 /* Frameworks */, A70000000000000000000002 /* Resources */); buildRules = (); dependencies = (); name = PoliticalFactCheckApp; packageProductDependencies = (AB000000000000000000001 /* PoliticalFactCheckCore */, AB000000000000000000002 /* PoliticalFactCheckPersistence */, AB000000000000000000003 /* PoliticalFactCheckAppModel */,); productName = PoliticalFactCheckApp; productReference = A30000000000000000000001 /* PoliticalFactCheckApp.app */; productType = "com.apple.product-type.application"; };
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A80000000000000000000001 /* Project object */ = {isa = PBXProject; attributes = {BuildIndependentTargetsInParallel = YES; LastSwiftUpdateCheck = 1600; LastUpgradeCheck = 1600; TargetAttributes = {A60000000000000000000001 = {CreatedOnToolsVersion = 16.0; }; }; }; buildConfigurationList = A90000000000000000000001 /* Build configuration list for PBXProject "PoliticalFactCheckApp" */; compatibilityVersion = "Xcode 15.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base); mainGroup = A50000000000000000000001; packageReferences = (AC000000000000000000001 /* XCLocalSwiftPackageReference "." */,); productRefGroup = A50000000000000000000003 /* Products */; projectDirPath = ""; projectRoot = ""; targets = (A60000000000000000000001 /* PoliticalFactCheckApp */,); };
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A70000000000000000000002 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A70000000000000000000001 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000001 /* PoliticalFactCheckApp.swift in Sources */, A10000000000000000000002 /* MainWindowView.swift in Sources */, A10000000000000000000003 /* CaseDetailView.swift in Sources */, A10000000000000000000004 /* EditorSheets.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		A90000000000000000000003 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {MACOSX_DEPLOYMENT_TARGET = 14.0; SDKROOT = macosx; SWIFT_VERSION = 5.0; }; name = Debug; };
+		A90000000000000000000004 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {MACOSX_DEPLOYMENT_TARGET = 14.0; SDKROOT = macosx; SWIFT_VERSION = 5.0; }; name = Release; };
+		A90000000000000000000005 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGNING_ALLOWED = NO; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.news"; INFOPLIST_KEY_NSPrincipalClass = NSApplication; MACOSX_DEPLOYMENT_TARGET = 14.0; PRODUCT_BUNDLE_IDENTIFIER = at.politischerfaktencheck.app; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = macosx; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_VERSION = 5.0; }; name = Debug; };
+		A90000000000000000000006 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGNING_ALLOWED = NO; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.news"; INFOPLIST_KEY_NSPrincipalClass = NSApplication; MACOSX_DEPLOYMENT_TARGET = 14.0; PRODUCT_BUNDLE_IDENTIFIER = at.politischerfaktencheck.app; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = macosx; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_VERSION = 5.0; }; name = Release; };
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A90000000000000000000001 /* Build configuration list for PBXProject "PoliticalFactCheckApp" */ = {isa = XCConfigurationList; buildConfigurations = (A90000000000000000000003 /* Debug */, A90000000000000000000004 /* Release */,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		A90000000000000000000002 /* Build configuration list for PBXNativeTarget "PoliticalFactCheckApp" */ = {isa = XCConfigurationList; buildConfigurations = (A90000000000000000000005 /* Debug */, A90000000000000000000006 /* Release */,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+/* End XCConfigurationList section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		AB000000000000000000001 /* PoliticalFactCheckCore */ = {isa = XCSwiftPackageProductDependency; package = AC000000000000000000001 /* XCLocalSwiftPackageReference "." */; productName = PoliticalFactCheckCore; };
+		AB000000000000000000002 /* PoliticalFactCheckPersistence */ = {isa = XCSwiftPackageProductDependency; package = AC000000000000000000001 /* XCLocalSwiftPackageReference "." */; productName = PoliticalFactCheckPersistence; };
+		AB000000000000000000003 /* PoliticalFactCheckAppModel */ = {isa = XCSwiftPackageProductDependency; package = AC000000000000000000001 /* XCLocalSwiftPackageReference "." */; productName = PoliticalFactCheckAppModel; };
+/* End XCSwiftPackageProductDependency section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		AC000000000000000000001 /* XCLocalSwiftPackageReference "." */ = {isa = XCLocalSwiftPackageReference; relativePath = .; };
+/* End XCLocalSwiftPackageReference section */
+	};
+	rootObject = A80000000000000000000001 /* Project object */;
+}
