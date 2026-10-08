@@ -143,6 +143,8 @@ struct PackageFixture {
     let base: PackageFixtureBase
     let script: ScriptDraft
     let statements: [ScriptStatement]
+    let auditEntry: AuditEntry
+    let researchTask: ResearchTask
     init() throws {
         base = try PackageFixtureBase(includeAction: true)
         let id = EntityID<ScriptDraft>()
@@ -154,6 +156,12 @@ struct PackageFixture {
         script = ScriptDraft(id: id, caseEvaluationID: base.evaluation.id, version: 2, targetDurationSeconds: 45,
             statementIDs: statements.map { $0.id }, status: .approved, author: .human(base.reviewer.id),
             createdAt: PackageFixtureBase.creation.addingTimeInterval(6 * 86400 + 0.1234567), approval: review)
+        auditEntry = AuditEntry(caseID: base.politicalCase.id,
+            target: ObjectReference(kind: .script, id: id), operation: packageFixtureText("approveScript"),
+            author: .human(base.reviewer.id), occurredAt: review.reviewedAt, reason: packageFixtureText("Synthetic human approval"))
+        researchTask = ResearchTask(caseID: base.politicalCase.id,
+            goal: packageFixtureText("Synthetic historical task"), author: .human(base.reviewer.id),
+            createdAt: PackageFixtureBase.creation)
     }
     func archive() throws -> PortableCaseArchiveV1 {
         var dto = CaseGraphDTO(base.context(scripts: [script], statements: statements))
@@ -161,10 +169,8 @@ struct PackageFixture {
         let canonical = try MethodologyV1.version()
         dto.methodologies = [MethodologyVersionDTO(canonical)]
         dto.caseEvaluations[0].methodologyVersionID = StoredID(canonical.id, kind: "MethodologyVersion")
-        dto.auditEntries = [AuditEntryDTO(AuditEntry(caseID: base.politicalCase.id,
-            target: ObjectReference(kind: .script, id: script.id), operation: packageFixtureText("approveScript"),
-            author: .human(base.reviewer.id), occurredAt: script.approval!.reviewedAt, reason: packageFixtureText("Synthetic human approval")))]
-        dto.researchTasks = [ResearchTaskDTO(ResearchTask(caseID: base.politicalCase.id, goal: packageFixtureText("Synthetic historical task"), author: .human(base.reviewer.id), createdAt: PackageFixtureBase.creation))]
+        dto.auditEntries = [AuditEntryDTO(auditEntry)]
+        dto.researchTasks = [ResearchTaskDTO(researchTask)]
         return try PortableCaseArchiveV1(dto.domain())
     }
     func context() throws -> DomainContext { try archive().domain() }
