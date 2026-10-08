@@ -140,13 +140,13 @@ public final class CaseWorkspaceModel: ObservableObject {
                                            author: .human(reviewer.id), createdAt: now), state: .draft)
             var updated = replacing(graph,
                 reviewers: mergedReviewer(reviewer, into: graph.reviewers),
-                criteria: graph.criteria + [criterion], criterionRevisions: graph.criterionRevisions + [revision],
                 cases: graph.cases.map { $0.id == caseID ? PoliticalFactCheckCore.Case(
                     id: $0.id, title: $0.title, promiseID: $0.promiseID,
                     currentPromiseRevisionID: $0.currentPromiseRevisionID,
                     activeCriterionRevisionIDs: $0.activeCriterionRevisionIDs + [revisionID],
                     currentActionRevisionIDs: $0.currentActionRevisionIDs, workflowState: $0.workflowState,
-                    createdAt: $0.createdAt, modifiedAt: now) : $0 })
+                    createdAt: $0.createdAt, modifiedAt: now) : $0 },
+                criteria: graph.criteria + [criterion], criterionRevisions: graph.criterionRevisions + [revision])
             updated = appendingAudit(updated, try auditEntry(caseID: caseID,
                 target: ObjectReference(kind: .criterionRevision, id: revisionID),
                 operation: "addCriterionDraft", author: reviewer.id, at: now,
