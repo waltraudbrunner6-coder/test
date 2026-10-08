@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import PoliticalFactCheckCore
 import PoliticalFactCheckAppModel
 import PoliticalFactCheckPersistence
@@ -40,12 +41,46 @@ struct CaseDetailView: View {
                 evidenceSection
                 evaluationSection
                 scriptSection
+                exportSection
                 deleteDraftSection
             }
             .padding(24)
             .frame(maxWidth: 900, alignment: .leading)
         }
         .navigationTitle(politicalCase.title.value)
+    }
+
+    private var exportSection: some View {
+        section("Export", systemImage: "square.and.arrow.up") {
+            Text("Historischer geprüfter Stand als lokales Redaktionspaket, Formatversion 1.").font(.caption)
+            ForEach(graph.scripts.filter { $0.status == .approved }, id: \.id) { script in
+                if let summary = workspace.editorialExportSummary(scriptID: script.id) {
+                    exportDetails(summary)
+                    Button("Redaktionspaket exportieren") { chooseExportDestination(script, summary: summary) }
+                }
+            }
+            if !graph.scripts.contains(where: { workspace.editorialExportSummary(scriptID: $0.id) != nil }) {
+                Text("Export verlangt eine aktuell freigegebene Bewertung und ein gültiges menschlich freigegebenes Skript.").foregroundStyle(.secondary)
+            }
+        }
+    }
+    private func exportDetails(_ summary: EditorialPackageSummary) -> some View {
+        VStack(alignment: .leading) {
+            Text("Bewertung: \(summary.category.displayName)")
+            Text("Stichtag: \(summary.cutoff.displayText)")
+            Text("Methodik: \(summary.methodologyVersion) · Scriptversion: \(summary.scriptVersion) · Status: approved")
+            Text("\(summary.statementCount) Statements · \(summary.sourceCount) Quellenfassungen · \(summary.excerptCount) Fundstellen · Paketformat \(summary.schemaVersion)")
+        }.font(.caption)
+    }
+    private func chooseExportDestination(_ script: ScriptDraft, summary: EditorialPackageSummary) {
+        let panel = NSSavePanel()
+        panel.title = "Redaktionspaket exportieren"
+        panel.canCreateDirectories = true
+        let name = summary.title.components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty }.joined(separator: "-")
+        panel.nameFieldStringValue = String((name.isEmpty ? "Fall" : name).prefix(80)) + ".politicalfactcheck"
+        guard panel.runModal() == .OK, let selected = panel.url else { return }
+        let destination = selected.pathExtension == "politicalfactcheck" ? selected : selected.appendingPathExtension("politicalfactcheck")
+        _ = workspace.exportEditorialPackage(scriptID: script.id, to: destination)
     }
 
     private var scriptSection: some View {

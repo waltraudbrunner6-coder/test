@@ -110,7 +110,9 @@ Im MVP kann dieselbe Person prüfen und freigeben; die Schritte bleiben getrennt
 
 **Zwingend für MVP:** lokale Fallbearbeitung, manuelle Quellenaufnahme, Kriterien und Evidenzbeziehungen, neutrale Bewertung mit menschlicher Freigabe, ein austauschbarer KI-Anbieter für Skriptentwürfe, Satz-für-Satz-Quellenprüfung, versioniertes Prüfprotokoll und Export. Keine Konten, Cloud-Synchronisierung oder automatisierte Recherche nötig.
 
-Der Export enthält einen Skriptentwurf für ungefähr 30–60 Sekunden, Szenen-/Visualhinweise, eine lesbare Quellenliste mit Fundstellen und einen maschinenlesbaren Fallbericht (JSON). Ein Quellenblatt ergänzt kurze Quellenkennungen im Skript. Noch kein fertiges Video. Zieldauer wird geschätzt; tatsächliche Sprechdauer ist erst mit Voiceover verifizierbar.
+Der Export enthält ausschließlich ein menschlich freigegebenes Skript mit einer Zielzeit von ungefähr 30–60 Sekunden, eine Szenengrundlage mit noch festzulegenden Visualhinweisen, eine lesbare Quellenliste mit Fundstellen und einen maschinenlesbaren Fallbericht samt vollständigem Fallarchiv (JSON). Ein Quellenblatt ergänzt kurze Quellenkennungen im Skript. Noch kein fertiges Video. Zieldauer wird geschätzt; tatsächliche Sprechdauer ist erst mit Voiceover verifizierbar.
+
+Phase 4.3 implementiert dafür ein offline erzeugtes Verzeichnis-Paket mit Formatversion 1 und geprüftem Wiederimport (`docs/export-format-v1.md`). Der Publication Gate verlangt eine aktuell approved CaseEvaluation und ein Domain-valides approved Script mit menschlichen Satzprüfungen; ReviewRequired blockiert. Methodology-Hash und Datei-SHA-256 werden geprüft, IDs/Historie bleiben erhalten, Kollisionen werden nicht gemerged. Neue CI-Verifikation und die fachliche Abnahme an einem echten Fall bleiben separat erforderlich.
 
 Der MVP ist abgenommen, wenn ein einzelner echter Fall:
 

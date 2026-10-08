@@ -109,3 +109,16 @@ Prüfstand Phase 4.1: 59 neue Tests (6 Core, 24 Scripting, 21 Persistence, 8 App
 Die bestehenden atomaren Skriptoperationen, DTOs, Domain-Regeln, historischen Snapshots, Delete Rules, Schema 1.0.0 und Payload-Format 1 bleiben unverändert. Providerresultate gelangen ausschließlich über saveGeneratedScriptDraft in den Store; dieser lädt erneut und prüft approved sowie den vollständigen Output. Neue Draft-/Satz-IDs und Audits entstehen gemeinsam, kein Teilergebnis. Keine Credentials, HTTP-Payloads, Authorization, Response-IDs oder Usage-Werte werden gespeichert. Die zufällige nicht personenbezogene safety_identifier-UUID liegt separat in lokalen UserDefaults und ist keine ReviewerIdentity.
 
 Drei neue Persistence-Tests prüfen Token-Stabilität über frische Contexts, Änderung durch eine neue Skriptversion bei unverändertem Snapshot sowie getrennte Provider-/Requester-Herkunft ohne Credentials. Zusammen mit 47 Scripting- und 17 AppModel-Tests werden 370 Tests erwartet; die bisherige Basis mit 303 Tests ist extern bestätigt, neue reale macOS-Ausführung steht aus.
+
+
+## Phase 4.3: transaktionaler Redaktionspaket-Import
+
+Das separate Export-Target besitzt eigene eingefrorene portable v1-DTOs statt SwiftData-Objekte oder Store-PropertyLists. Persistence hängt für den konkreten Import auf Export, nicht umgekehrt. LocalCaseStore.importEditorialPackage nimmt nur ein vollständig geprüftes Paket an, rekonstruiert den DomainContext und prüft Case-ID-Abwesenheit innerhalb derselben frischen Transaktion vor writeCase. Alle IDs, Reviews, ursprünglichen Freigaben, Snapshot-Manifeste und Auditzeitpunkte bleiben erhalten. Kein neuer Importaudit und kein Überschreiben historischer Audits.
+
+Case-ID-Kollision wird als „Dieser Fall ist bereits vorhanden.“ abgewiesen. Identische geteilte Entities können wiederverwendet werden; andere Inhalte unter vorhandener ID werden durch bestehende Identitäts-/Replacement-Prüfungen blockiert. Ein Fehler rollt den gesamten Import zurück. Export liest ausschließlich und erzeugt keinen Audit/Statuswechsel. Schema 1.0.0, Store-Payload-Format 1 und bestehende Delete Rules bleiben unverändert. Der portable Vertrag hat eine getrennte schemaVersion 1 und explizite Datums-/Referenzkodierung; künftige Migrationen dürfen Historie nicht verändern.
+
+Lokale Anhänge, Secrets und Netzwerkstate sind nicht transportierbar. Paketimport ist keine Quellenprüfung, automatische Freigabe, politische Bewertung oder Zusammenführung. Roundtrip-Tests verwenden ausschließlich synthetische Daten, temporäre Paketverzeichnisse und frische In-Memory-Container/Contexts. Format-/Hash-/Publication-Gate-Details stehen in export-format-v1.md.
+
+Prüfstand Phase 4.3: 85 neue Tests, erwartet 455 insgesamt (139 Core, 71 Scripting, 119 Persistence, 60 AppModel, 66 Export). Alle bisherigen 370 Testdateien unverändert. Lokal Swift/Xcode Exit 127; GitHub-Actions-Abfrage Forbidden. git diff --check erfolgreich. Neuer CI-Test-/Buildnachweis ausstehend; Workflow unverändert.
+
+Die gestagte Diff-Prüfung meldet ausschließlich die absichtlich bytegleich kopierte abschließende Leerzeile der kanonischen Methodikressource. Alle übrigen Dateien bestehen git diff --cached --check. Die Ressource wird wegen ihres eingefrorenen SHA-256 nicht getrimmt.

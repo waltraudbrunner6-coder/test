@@ -926,3 +926,30 @@ struct OpenAITransmissionSheet: View {
         }
     }
 }
+
+
+struct EditorialImportSheet: View {
+    @EnvironmentObject private var workspace: CaseWorkspaceModel
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Redaktionspaket importieren").font(.title2)
+            if let summary = workspace.editorialImportPreview {
+                Text("Fall: \(summary.title)")
+                Text("Bewertung: \(summary.category.manualLabel)")
+                Text("Stichtag: \(summary.cutoffText)")
+                Text("Methodik: \(summary.methodologyVersion) · Scriptversion: \(summary.scriptVersion)")
+                if let date = summary.exportedAt { Text("Exportzeit: \(date.formatted())") }
+                Text("Historischer geprüfter Stand. Keine Nachladung, kein Merge, keine neue politische Bewertung.").font(.caption)
+            }
+            if let error = workspace.errorMessage { Text(error).foregroundStyle(.red) }
+            HStack {
+                Button("Abbrechen") { workspace.dismissEditorialImport(); dismiss() }
+                Spacer()
+                Button("Importieren") { if workspace.confirmEditorialImport() { dismiss() } }
+                    .disabled(workspace.editorialImportPreview == nil)
+            }
+        }.padding(20).frame(width: 620)
+        .onDisappear { workspace.dismissEditorialImport() }
+    }
+}

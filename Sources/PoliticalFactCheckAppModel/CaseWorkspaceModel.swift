@@ -3,6 +3,7 @@ import Foundation
 import PoliticalFactCheckCore
 import PoliticalFactCheckPersistence
 import PoliticalFactCheckScripting
+import PoliticalFactCheckExport
 
 @MainActor
 public final class CaseWorkspaceModel: ObservableObject {
@@ -716,6 +717,60 @@ public final class CaseWorkspaceModel: ObservableObject {
             if approve { try store.approveScript(caseID: caseID, scriptID: id, reviewer: reviewer, at: Date()) }
             else { try store.submitScriptForReview(caseID: caseID, scriptID: id, reviewer: reviewer, at: Date()) }
             reload(selecting: caseID)
+            return true
+        } catch { present(error); return false }
+    }
+
+    @Published public private(set) var editorialImportPreview: EditorialPackageSummary?
+    private var editorialImportURL: URL?
+    private var editorialImportManifest: EditorialManifestV1?
+
+    public func editorialExportSummary(scriptID: EntityID<ScriptDraft>) -> EditorialPackageSummary? {
+        guard let graph = selectedContext, let script = graph.find(scriptID) else { return nil }
+        return try? EditorialPackage.summary(graph: graph, evaluationID: script.caseEvaluationID, scriptID: scriptID)
+    }
+
+    @discardableResult
+    public func exportEditorialPackage(scriptID: EntityID<ScriptDraft>, to destination: URL) -> Bool {
+        do {
+            guard let store, let id = selectedCaseID, let graph = try store.loadCase(id: id),
+                  let script = graph.find(scriptID) else { throw WorkspaceInputError.caseUnavailable }
+            let contents = try EditorialPackage.create(graph: graph, evaluationID: script.caseEvaluationID, scriptID: scriptID)
+            try EditorialPackageIO.write(contents, to: destination)
+            errorMessage = nil
+            return true
+        } catch { present(error); return false }
+    }
+
+    @discardableResult
+    public func prepareEditorialImport(from url: URL) -> Bool {
+        dismissEditorialImport()
+        do {
+            let package = try EditorialPackageIO.read(from: url)
+            guard let store else { throw WorkspaceInputError.storeUnavailable }
+            guard try store.loadCase(id: package.summary.caseID) == nil else { throw EditorialPackageError.caseAlreadyExists }
+            editorialImportPreview = package.summary
+            editorialImportURL = url
+            editorialImportManifest = package.manifest
+            errorMessage = nil
+            return true
+        } catch { present(error); return false }
+    }
+
+    public func dismissEditorialImport() { editorialImportPreview = nil; editorialImportURL = nil; editorialImportManifest = nil }
+
+    @discardableResult
+    public func confirmEditorialImport() -> Bool {
+        do {
+            guard let url = editorialImportURL, let summary = editorialImportPreview,
+                  let store else { throw EditorialPackageError.invalidPackage }
+            // Read and validate again after the preview; no stale file approval bypass.
+            let package = try EditorialPackageIO.read(from: url)
+            guard package.summary == summary, package.manifest == editorialImportManifest else { throw EditorialPackageError.invalidPackage }
+            let id = try store.importEditorialPackage(package)
+            dismissEditorialImport()
+            reload(selecting: id)
+            errorMessage = nil
             return true
         } catch { present(error); return false }
     }

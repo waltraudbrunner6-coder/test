@@ -1,10 +1,34 @@
 import Foundation
 import PoliticalFactCheckCore
 import PoliticalFactCheckScripting
+import PoliticalFactCheckExport
 import PoliticalFactCheckPersistence
 
 public enum WorkspaceErrorMessage {
     public static func describe(_ error: Error) -> String {
+        if let error = error as? EditorialPackageError {
+            switch error {
+            case .evaluationNotApproved: return "Keine gültige menschlich freigegebene Bewertung vorhanden."
+            case .evaluationNeedsReview: return "Bewertung muss erneut geprüft werden; Export blockiert."
+            case .scriptNotApproved: return "Ein menschlich freigegebenes Skript ist erforderlich."
+            case .scriptEvaluationMismatch: return "Das Skript gehört nicht zur gewählten Bewertung."
+            case .invalidScript: return "Das Skript oder seine Satzprüfungen sind ungültig."
+            case .unsupportedVersion: return "Diese Redaktionspaket-Version wird nicht unterstützt."
+            case .missingFile: return "Eine Paketdatei fehlt oder die Dateiliste ist ungültig."
+            case .hashConflict: return "Eine Paketdatei stimmt nicht mit ihrem SHA-256 überein."
+            case .methodologyConflict: return "Methodikinhalt oder Methodology-Hash stimmt nicht überein."
+            case .invalidJSON: return "Das Redaktionspaket enthält ungültiges JSON."
+            case .invalidReference: return "Das Redaktionspaket enthält beschädigte oder fremde Referenzen."
+            case .invalidDomain: return "Die Domainvalidierung des Redaktionspakets ist fehlgeschlagen."
+            case .caseAlreadyExists: return "Dieser Fall ist bereits vorhanden."
+            case .nonPortableAttachment: return "Portable Export lokaler Anhänge wird noch nicht unterstützt."
+            case .sensitiveContent: return "Das Paket enthält mögliche Zugangsdaten oder Netzwerk-Dumps; Vorgang blockiert."
+            case .writeFailure: return "Das Redaktionspaket konnte nicht vollständig geschrieben werden."
+            case .readFailure: return "Das Redaktionspaket konnte nicht sicher gelesen werden."
+            case .invalidPackage: return "Paketinhalt und geprüfter Fallstand stimmen nicht überein."
+            case .destinationExists: return "Am Ziel existiert bereits ein Paket. Wähle einen neuen Speicherort."
+            }
+        }
         if let error = error as? PersistenceError {
             switch error {
             case .scriptGeneration(let error): return describe(error)

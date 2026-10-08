@@ -92,3 +92,16 @@ Die normale Skriptaktion öffnet „An OpenAI übertragene Daten“ mit Modell, 
 Frisch geladener Fall, approved-Status, Snapshotinput und lokaler Änderungstoken werden vor dem Senden geprüft. Relevante Änderung verlangt neue Vorschau; wiederholbare Providerfehler erhalten sie. Busy-Flag, deaktivierte Send-/Abbrechen-Buttons und ProgressView verhindern parallele Requests. Erfolg zeigt neue Version als „KI-Entwurf – ungeprüft“; bestehende Satzprüfung/Freigabe bleiben unverändert. Keine automatische HumanReview oder politische Neubewertung.
 
 Technische Einzelheiten, Key-Umgebung, Datenschutzgrenzen und Promptversion stehen in openai-integration.md. Phase-4.1-Basis ist extern mit 303 Tests/BUILD SUCCEEDED bestätigt. Neu: 67 Offline-Tests, erwartet 370 insgesamt; neuer macOS-Test-/Buildnachweis ausstehend. UI-Interaktionen sind nicht durch einen automatisierten UI-Test nachgewiesen.
+
+
+## Phase 4.3: Redaktionspaket
+
+Der neue Exportbereich zeigt vor dem Zielpanel Bewertung, Stichtag, Methodik, Scriptversion/approved, Satz-/Quellenfassungs-/Fundstellenzahl und Format 1. „Redaktionspaket exportieren“ wird nur für ein über die gemeinsame Export-/Domainvalidierung zugelassenes Skript angeboten. NSSavePanel wählt den expliziten neuen Zielort; vor Schreiben wird der Fall frisch geprüft. Keine zweite UI-Freigabelogik und kein Überschreiben bestehender Pakete.
+
+„Redaktionspaket importieren“ in der Haupttoolbar öffnet NSOpenPanel für ein .politicalfactcheck-Verzeichnis. Vollständige Prüfung erfolgt vor dem Sheet mit Titel, Bewertung, Stichtag, Methodikversion, Scriptversion und Exportzeit. Erst „Importieren“ persistiert nach erneuter Datei-/Manifestprüfung atomar. Abbrechen speichert nichts. Vorhandene Case-ID, Hash-/Methodikkonflikte und Referenz-/Domainfehler erscheinen kontrolliert im Workspace. Kein Netzwerk oder OpenAI-Aufruf in diesen Aktionen. Native Panels sind ausschließlich in der App; keine UI-Abhängigkeit im Exportmodul.
+
+Das Paket repräsentiert einen historischen geprüften Stand, erzeugt keine politischen Aussagen und enthält keine erfundenen Visuals. Details und Datenschutz-/Archivgrenzen: export-format-v1.md. Die Basis 68a45367a3b5af0ba0817617fc114415e520d5db ist extern mit 370 Tests und erfolgreichem nativen Build bestätigt; neue Tests/Build benötigen gesonderten CI-Nachweis.
+
+Prüfstand Phase 4.3: 85 neue Tests, erwartet 455 insgesamt (139 Core, 71 Scripting, 119 Persistence, 60 AppModel, 66 Export). Alle bisherigen 370 Testdateien unverändert. Lokal Swift/Xcode Exit 127; GitHub-Actions-Abfrage Forbidden. git diff --check erfolgreich. Neuer CI-Test-/Buildnachweis ausstehend; Workflow unverändert.
+
+Die gestagte Diff-Prüfung meldet ausschließlich die absichtlich bytegleich kopierte abschließende Leerzeile der kanonischen Methodikressource. Alle übrigen Dateien bestehen git diff --cached --check. Die Ressource wird wegen ihres eingefrorenen SHA-256 nicht getrimmt.

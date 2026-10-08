@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import PoliticalFactCheckExport
 import PoliticalFactCheckCore
 
 /// One local writer. Each operation owns a fresh context with autosave disabled.
@@ -73,6 +74,7 @@ public final class LocalCaseStore {
             try context.save()
         } catch {
             context.rollback()
+            if let error = error as? EditorialPackageError { throw error }
             if let error = error as? PersistenceError { throw error }
             if let error = error as? DomainValidationError { throw PersistenceError.invalidDomain([error]) }
             throw PersistenceError.storage(operation: operation, detail: String(describing: error))

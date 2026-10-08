@@ -6,3 +6,6 @@ public typealias ScriptGenerationOutput = PoliticalFactCheckScripting.ScriptGene
 public typealias GeneratedScriptStatement = PoliticalFactCheckScripting.GeneratedScriptStatement
 public typealias OpenAITransmissionPreview = PoliticalFactCheckScripting.OpenAITransmissionPreview
 public typealias OpenAIScriptProviderConfiguration = PoliticalFactCheckScripting.OpenAIScriptProviderConfiguration
+
+import PoliticalFactCheckExport
+public typealias EditorialPackageSummary = PoliticalFactCheckExport.EditorialPackageSummary

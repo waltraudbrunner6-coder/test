@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import PoliticalFactCheckCore
 import PoliticalFactCheckAppModel
 import PoliticalFactCheckPersistence
@@ -31,6 +32,7 @@ struct MainWindowView: View {
             ToolbarItemGroup {
                 Button("Neu laden", systemImage: "arrow.clockwise") { workspace.reload() }
                     .help("Lokale Fälle neu laden")
+                Button("Redaktionspaket importieren", systemImage: "square.and.arrow.down") { chooseEditorialPackage() }
                 Button("Neuer Fall", systemImage: "plus") { sheet = .newCase }
                     .help("Einen ungeprüften Faktencheck-Fall anlegen")
                 Button("Prüfername", systemImage: "person.crop.circle") { sheet = .reviewer }
@@ -40,6 +42,16 @@ struct MainWindowView: View {
         .sheet(item: $sheet) { selectedSheet in
             sheetContent(selectedSheet)
         }
+    }
+
+    private func chooseEditorialPackage() {
+        let panel = NSOpenPanel()
+        panel.title = "Redaktionspaket importieren"
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        if workspace.prepareEditorialImport(from: url) { sheet = .editorialImport }
     }
 
     private var sidebar: some View {
@@ -83,6 +95,8 @@ struct MainWindowView: View {
             OpenAITransmissionSheet()
         case .manualScript(let evaluationID, let sourceID):
             ManualScriptSheet(evaluationID: evaluationID, sourceID: sourceID)
+        case .editorialImport:
+            EditorialImportSheet()
         case .reviewer:
             ReviewerSettingsSheet()
         }
@@ -91,7 +105,7 @@ struct MainWindowView: View {
 
 enum EditorSheet: Identifiable {
     case newCase, newCriterion, newSource, reviewer, newAction, newEvidence, promiseReadiness, manualEvaluation
-    case openAITransmission
+    case openAITransmission, editorialImport
     case manualScript(EntityID<CaseEvaluation>, EntityID<ScriptDraft>?)
     case reviewAction(EntityID<ActionRevision>)
     var id: String {
@@ -105,6 +119,7 @@ enum EditorSheet: Identifiable {
         case .promiseReadiness: "promiseReadiness"
         case .manualEvaluation: "manualEvaluation"
         case .openAITransmission: "openAITransmission"
+        case .editorialImport: "editorialImport"
         case .manualScript(let id, let source): "script-\(id.rawValue)-\(source?.rawValue.uuidString ?? "new")"
         case .reviewAction(let id): "reviewAction-\(id.rawValue.uuidString)"
         }
