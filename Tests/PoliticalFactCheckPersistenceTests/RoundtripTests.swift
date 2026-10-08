@@ -192,10 +192,27 @@ final class RoundtripTests: XCTestCase {
             dto.promiseRevisions[0].party.provenance = "aiExtracted"
             dto.promiseRevisions[0].party.excerptIDs = []; dto.promiseRevisions[0].party.review = nil
             dto.promiseRevisions[0].conditions.content = .notApplicable("Synthetic unconditional promise")
+            dto.promiseRevisions[0].conditions.verification = "unreviewed"
+            dto.promiseRevisions[0].conditions.excerptIDs = []
+            dto.promiseRevisions[0].conditions.review = nil
             let graph = try dto.domain()
             let store = try LocalCaseStore.inMemory()
             try store.saveCase(graph)
-            assertGraphsEqual(graph, try XCTUnwrap(store.loadCase(id: f.politicalCase.id)))
+            let loaded = try XCTUnwrap(store.loadCase(id: f.politicalCase.id))
+            assertGraphsEqual(graph, loaded)
+
+            let party = loaded.promiseRevisions[0].party
+            XCTAssertEqual(party.content, .unknown(reason: text("Synthetic unknown party")))
+            XCTAssertEqual(party.provenance, .aiExtracted)
+            XCTAssertEqual(party.verification, .unreviewed)
+            XCTAssertTrue(party.excerptIDs.isEmpty)
+            XCTAssertNil(party.review)
+
+            let conditions = loaded.promiseRevisions[0].conditions
+            XCTAssertEqual(conditions.content, .notApplicable(reason: text("Synthetic unconditional promise")))
+            XCTAssertEqual(conditions.verification, .unreviewed)
+            XCTAssertTrue(conditions.excerptIDs.isEmpty)
+            XCTAssertNil(conditions.review)
         }
     }
 }
