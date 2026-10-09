@@ -70,7 +70,7 @@ final class DiscoveryHTTPStub: URLProtocol {
         Self.lock.lock(); let handler = Self.handler; Self.requests.append(captured); Self.lock.unlock()
         do {
             guard let handler else { throw URLError(.unsupportedURL) }
-            let (status, data) = try handler(request)
+            let (status, data) = try handler(captured)
             client?.urlProtocol(self, didReceive: HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: nil)!, cacheStoragePolicy: .notAllowed)
             client?.urlProtocol(self, didLoad: data); client?.urlProtocolDidFinishLoading(self)
         } catch { client?.urlProtocol(self, didFailWithError: error) }

@@ -6,6 +6,35 @@ import XCTest
 @testable import PoliticalFactCheckResearch
 
 final class CaseResearchProviderTests: XCTestCase {
+    func testHTTPStubNormalizesStreamBodyForHandlerAndCapture() async throws {
+        let body = Data("synthetic stream body".utf8)
+        let url = try XCTUnwrap(URL(string: "https://source.invalid/stub"))
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("synthetic-header", forHTTPHeaderField: "X-Fixture")
+        request.httpBodyStream = InputStream(data: body)
+        XCTAssertNil(request.httpBody)
+        XCTAssertNotNil(request.httpBodyStream)
+        DiscoveryHTTPStub.reset { normalized in
+            XCTAssertEqual(try XCTUnwrap(normalized.httpBody), body)
+            XCTAssertEqual(normalized.url, url)
+            XCTAssertEqual(normalized.httpMethod, "POST")
+            XCTAssertEqual(normalized.value(forHTTPHeaderField: "X-Fixture"), "synthetic-header")
+            return (200, Data("synthetic response".utf8))
+        }
+        let session = DiscoveryHTTPStub.session()
+        defer { session.invalidateAndCancel() }
+        let (responseBody, _) = try await session.data(for: request)
+        XCTAssertEqual(responseBody, Data("synthetic response".utf8))
+        let captured = DiscoveryHTTPStub.captured()
+        XCTAssertEqual(captured.count, 1)
+        let normalized = try XCTUnwrap(captured.first)
+        XCTAssertEqual(try XCTUnwrap(normalized.httpBody), body)
+        XCTAssertEqual(normalized.url, url)
+        XCTAssertEqual(normalized.httpMethod, "POST")
+        XCTAssertEqual(normalized.value(forHTTPHeaderField: "X-Fixture"), "synthetic-header")
+    }
+
     func provider(key: String = "synthetic-test-key") -> OpenAICaseResearchProvider { OpenAICaseResearchProvider(session: DiscoveryHTTPStub.session(), environment: { ["OPENAI_API_KEY": key] }) }
     func body(_ f: DeepResearchFixture, _ intent: ResearchIntent) throws -> [String: Any] {
         let criterion = try f.result().proposedCriteria[0]
