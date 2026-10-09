@@ -1,0 +1,45 @@
+# Phase 5.1: automatische Versprechenssuche
+
+Extern bestätigte Ausgangsbasis: `d0f2460e33f5360c718df7e29b254220431819c8`, Apple Swift 6.1.2, 463 erfolgreiche Tests, nativer macOS-arm64-Build erfolgreich. Dieser neue Stand benötigt einen eigenen macOS-CI-Nachweis.
+
+## Architektur und Umfang
+
+`PoliticalFactCheckResearch` hängt nur auf Core/Foundation, enthält providerneutrale Request-/Result-Werte, Quellenpolitik, normalisierte Suchmetadaten, Datums-/Kandidatenvalidierung und einen puren Mapper. `PromiseDiscoveryProvider` ist der austauschbare Vertrag. Die Prompt-Version kommt aus dem Providerresultat, nicht aus einer OpenAI-Annahme im Mapper; alternative Adapter kennzeichnen fehlende Version explizit als unspecified. Persistence importiert vollständige ungeprüfte Kandidaten über `LocalCaseStore.insertDiscoveryCandidate`. AppModel orchestriert und lädt die aus gespeicherten ResearchTasks abgeleitete Inbox. Die native Oberfläche bietet „Automatisch Fälle finden“, Inbox, Fortschritt, Abbruch, Quellenlinks, Öffnen und sichere Draft-Löschung. Keine bestehende manuelle Bearbeitung wird entfernt.
+
+Dieser Schritt findet Originalversprechen und legt candidate-Cases an. Keine Outcome-Recherche, Handlung, CriterionRevision, EvidenceLink, Evaluation, MethodologyVersion, Skript, Storyboard oder Video wird automatisch erzeugt. Spätere Phasen sollen Recherche, Belegprüfung, Bewertungsentwürfe und Medien automatisieren; die endgültige redaktionelle Prüfung und Freigabe bleiben menschlich.
+
+## OpenAI-Vertrag
+
+Endpoint `/v1/responses`, Modell `gpt-6.1-sol`, `reasoning.effort=medium`, `store=false`; ausschließlich `web_search`, `external_web_access=true`, pro Gruppe `filters.allowed_domains`, `tool_choice=required`, `include=[web_search_call.action.sources]`. Sechs sequenzielle, gleich budgetierte Gruppenrequests gemäß Quellenpolitik. JSON-Schema in `OpenAIPromiseDiscoveryProvider.schema` ist strict, ohne zusätzliche Felder, alle nullable Felder verpflichtend vorhanden. Gebündelter Prompt und `docs/openai-promise-discovery-prompt-v1.md` sind bytegleich. Schlüssel ausschließlich `OPENAI_API_KEY` im lokalen Prozess, nur Authorization-Header; keine Keychain, Broker, Konten oder CI-Secrets. Ohne Schlüssel keine Anfrage.
+
+Die aktuellen öffentlichen Responses-Schemata unterstützen Web Search, Domainfilter, external_web_access und Search-Sources-Include. Reale Modell-/Accountberechtigung und Betriebsqualität sind mangels Live-Anfrage noch nicht nachgewiesen. Offline-Tests behaupten keine OpenAI-Freischaltung.
+
+Eine abgeschlossene tatsächliche Search-Tool-Action ist erforderlich. `open_page` oder erfundene Source-IDs aus dem Output reichen nicht. Die Quellenliste darf bei null Funden leer sein, muss aber geliefert worden sein. URLs werden aus actual Search-Sources und URL-Citation-Annotations gesammelt, kanonisch dedupliziert, sortiert und als `WEB-n` benannt. Nur Quellen mit `fromSearch=true` können einen Kandidaten tragen. Unbekannte URL, fremde Domain, falscher Key, fehlender Tool-Aufruf oder fehlende Quellenliste werden kontrolliert abgewiesen. Citations allein sind keine Evidenz. Relevante URL-Metadaten werden gespeichert; keine rohen HTTP-Payloads, Authorization, API-Key, Response-ID oder Reasoning-Inhalte.
+
+Kandidat: Titel, wortgetreues Zitat, separate nullable Sprecher-/Parteinamen, Aussagezeit und Präzision, getrennte Quellenpublikation, These, Themen, Prüfbarkeitsbegründung, URL/Titel/Fundstelle, Unsicherheiten, konkrete Ziel-/Outcome-Flags und nullable Frist. SourceReferenceKey darf vor der Antwort null sein; Zuordnung erfolgt anschließend durch tatsächliche URL/WEB-Kennung. Alle Inhalte sind ungeprüfte Extraktionsbehauptungen. Originalität, Zitattreue, Attribution und Kontext lassen sich durch Schema-/URL-Prüfung nicht beweisen.
+
+## Mapping und Persistenz
+
+Pro akzeptiertem Kandidat entstehen Case/Promise/PromiseRevision, optional separate Actor-Werte, Source/SourceVersion/SourceExcerpt, ein bestehender ResearchTask und ein AI-AuditEntry. Case bleibt candidate. Alle AssertedValues sind aiExtracted/unreviewed/nil-Review; unbekannte Rollen bleiben begründet unknown, keine Partei wird aus der Domain abgeleitet. Keine ActorAffiliation wird erfunden. SourceVersion bleibt unknown/unreviewed, Excerpt aiExtracted/unverified. Kein Reviewer ist erforderlich oder wird erzeugt. Promise-Metadaten und Task/Audit verwenden `.ai(model:templateVersion:)`, niemals system/human. Auditoperation: `discoverPromiseCandidate`.
+
+ResearchTask.result enthält ein eng typisiertes, versioniertes JSON-Metadatenobjekt: Policy-Snapshot, Gruppe, Provider/Prompt, akzeptierter Kandidat, Suchquellen/Citations, Zeitpunkt und Limits. Task.query speichert die Suchstrategie. Schema 1.0.0 / Payload-Format 1 bleiben unverändert; kein zweiter Task-/Inbox-Datensatz. Der Task ist completed hinsichtlich der Entdeckung, nicht hinsichtlich Quellenprüfung oder Wahrheit. Die Inbox zeigt candidate-Cases mit dieser Aufgabe; dokumentierte Fälle bleiben in der normalen Fallliste. Beschädigte Metadaten erzeugen Fehler, keine stille Reparatur.
+
+SourceVersion.retrievedAt hält den Recherchezeitpunkt, keine behauptete eigene Dokumentabholung. Deshalb bleiben finalURL, Hash, lokale Kopie und Availability unbekannt. Publication und Statement sind separate Domain-Rollen; auch eine 2025 veröffentlichte Quelle darf ein 2021er Versprechen enthalten. Datumspräzision bleibt Tag/Monat/Jahr/unknown. Altersprüfung verwendet konservativ das Ende des Aussageintervalls; Frist-Ausnahme das Ende der Frist. Kein Bewertungsstichtag oder Urteil entsteht.
+
+Atomar pro Kandidat: alle Domainobjekte, Task und Audit werden gemeinsam validiert/gespeichert oder gemeinsam zurückgerollt. Eine abgeschlossene Runde darf gültige Kandidaten behalten und einzelne ungültige Kandidaten verwerfen; keine globale Alles-oder-nichts-Transaktion über Gruppen. Dedup wird im selben frischen Store-Context gegen alle bestehenden Fälle und Zitatrevisionen geprüft. Schlüssel: kanonische URL + nur whitespace-normalisiertes Originalzitat. Schema/Host klein, Fragment und Default-Port entfernt; Pfad-/Query-/Zitatgroßschreibung bleibt erhalten. Kein semantisches Merging. Gleiche Quelle allein ist kein Duplikat. Bekannte Grenze: nur ein lokaler Writer, vollständige Fallabfragen statt Suchindex.
+
+## Score, UI und Fehler
+
+Prüfbarkeit 0–100, kein Wahrheitsscore: 20 für die bereits akzeptierte tatsächliche Primär-URL, je 20 für konkretes Ziel/beobachtbares Ergebnis, je 10 für benannten Akteur, Aussagezeit, Frist/Bedingung und ausreichendes Alter/abgelaufene Frist. Flags bleiben unverified. Namen, Kontroversitätsbegriffe und mögliche Kategorie beeinflussen den Score nicht; Inbox wird stabil nach ID angezeigt, nicht politisch sortiert.
+
+UI-Hinweis: „KI-gefundene Fälle sind ungeprüfte Recherchekandidaten. Quellen und Kontext werden in den nächsten automatischen Prüfschritten weiter validiert.“ Quelle mit Kategorie, Link, Titel und URL; Zitat, Sprecher/Partei, Datum/Präzision, Score und Unsicherheiten sind sichtbar. Eine zweite Runde wird während laufender Recherche verhindert; vorhandene Fälle bleiben bedienbar. Abbruch verwirft das noch laufende Provider-Batch vollständig; während der anschließenden synchronen Einzelimports gibt es keinen weiteren Await-/Abbruchpunkt. Bereits früher gespeicherte Fälle bleiben erhalten.
+
+Fehlender Schlüssel, 401/403/408/429/5xx, Timeout, Transport, Refusal, incomplete, malformed, Struktur-/Source-Fehler sind kontrolliert. Gruppenfehler und Kandidatenablehnungen erscheinen getrennt vom vorhandenen Fallzustand. Gruppensummen, Duplikate und null Funde sind sichtbar. Rohantworten werden auch bei Fehlern nicht ausgegeben. Globale fehlgeschlagene/null-Runden bleiben flüchtig, weil sie keinem Case gehören; kein künstlicher Fall zur Protokollierung. UI-/Netzwerkabbrüche überschreiben keine Bewertung oder manuelle Falldaten.
+
+## Tests und Grenzen
+
+Alle neuen HTTP-Tests verwenden URLProtocol und synthetische Quellen/Akteure, keinerlei Live-Web-/OpenAI-Zugriff oder Keys. Ressourcen-/Schema-/Symmetrie-, Source-Provenienz-, Datums-, Neutralitäts-, Mapping-/Status-, Roundtrip-/Dedup-/Rollback-, Inbox-/Abbruchtests ergänzen die unveränderten 463 bisherigen Tests. CI bleibt `swift test` gefolgt vom nativen arm64-xcodebuild. Lokal fehlen Swift/Xcode; erfolgreiches Test-/Build-Ergebnis dieser Änderung wird erst nach echter CI bestätigt.
+
+Keine Garantie vollständiger Treffer, echter Wortlauttreue oder gleichmäßiger Suchabdeckung. Kein Crawl/Download/HTML-Parsing, keine Netzwerk-Recherche in Persistence oder Core, keine automatisch verifizierten Quellen. Keine Livequalität, Authentizität oder Produktivfreigabe behauptet. Das Metadatenformat ist unabhängig versioniert; künftige Format-/Policyänderungen dürfen gespeicherte Herkunft und Historie nicht umschreiben.
+
+Prüfstand dieses Schritts: **95 neue Tests**, erwartet **558 insgesamt** (463 bestehende unverändert). Neu: 69 Research, 13 Persistence, 13 AppModel. `swift --version`, `swift test` und der native `xcodebuild` enden lokal mit Exit 127 (command not found). Dies ist kein erfolgreicher Testlauf; macOS-CI-Verifikation steht aus.

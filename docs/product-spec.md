@@ -1,6 +1,6 @@
 # Produktspezifikation: Politische Faktencheck-Videos für macOS
 
-Status: Phase 1 · Produktspezifikation · Stand: 7. Oktober 2026
+Status: Phase 5.1 · automatische Versprechenssuche · Stand: 9. Oktober 2026
 
 ## 1. Ziel und Leitprinzipien
 
@@ -8,12 +8,13 @@ Eine macOS-Anwendung unterstützt die nachvollziehbare Prüfung öffentlich doku
 
 **Alle Parteien werden nach derselben Methodik geprüft.** Parteiidentität, Popularität oder eine angenommene Absicht sind keine Bewertungskriterien. Eine Abweichung belegt für sich weder Täuschung noch Unehrlichkeit. Große, gut belegte Diskrepanzen dürfen die spätere redaktionelle Fallauswahl beeinflussen; sie verändern keine Bewertungsmaßstäbe.
 
-Der erste MVP bearbeitet genau ein manuell ausgewähltes Versprechen vollständig: Erfassung → Belege und Gegenbelege → menschliche Bewertung → KI-gestützter Skriptentwurf → Quellenprüfung → exportierbares Redaktionspaket. Automatische Recherche über viele Parteien und Videoerzeugung gehören nicht zum MVP.
+Die bisherige technische MVP-Basis ist extern bestätigt: Commit d0f2460e33f5360c718df7e29b254220431819c8, 463 erfolgreiche Tests und nativer arm64-Build. Die Produktstrategie wird erweitert: automatische Fallfindung → Primärquellen → später automatisierte Beleg-/Gegenbelegsuche → Bewertungsentwurf → Skript/Storyboard/Video → menschliche Endprüfung und Freigabe. Phase 5.1 implementiert ausschließlich automatische Versprechenssuche und ungeprüfte candidate-Cases in einer Recherche-Inbox. Alle späteren Automationsschritte sind Ausbauziele; manuelle Bearbeitung bleibt verfügbar. Methodik und menschliche Endfreigabe bleiben verbindlich. Siehe `docs/automatic-research.md` und `docs/research-source-policy-v1.md`.
 
 ## 2. Komponenten und Ablauf
 
 | Komponente | Aufgabe im MVP |
 | --- | --- |
+| Automatische Fallfindung | Gleiche versionierte Primärquellenpolitik für alle Parteigruppen; ungeprüfte Kandidaten ohne Nutzerquery, keine Bewertung. |
 | Fallverwaltung | Ein Versprechen mit Akteur, Kontext, Prüfzeitraum und Kriterien anlegen. |
 | Quellenablage | Dokumente, URLs, Auszüge und genaue Fundstellen manuell aufnehmen. |
 | Belegprüfung | Originalität, Kontext, Datum und Aussagekraft prüfen; Gegenbelege und offene Fragen dokumentieren. |
@@ -22,13 +23,13 @@ Der erste MVP bearbeitet genau ein manuell ausgewähltes Versprechen vollständi
 | Skriptassistenz | Aus dem geprüften Fall einen kurzen Text mit belegten Aussagen und sichtbaren Einschränkungen entwerfen. |
 | Redaktion und Export | Satzweise Quellenzuordnung prüfen; Skript, Quellenliste und Prüfprotokoll exportieren. |
 
-Der Nutzer formuliert zunächst die prüfbare Bedeutung des Versprechens. Allgemeine Ziele werden nur bewertet, wenn überprüfbare Kriterien ohne nachträgliche Bedeutungsverschiebung ableitbar sind. Mehrteilige Versprechen erhalten einzelne Kriterien; unabhängige Versprechen werden getrennte Fälle.
+Die KI kann zunächst eine ausdrücklich ungeprüfte Prüfthese vorschlagen. Der Mensch bestätigt die prüfbare Bedeutung und Kriterien vor der Bewertung. Allgemeine Ziele werden nur bewertet, wenn überprüfbare Kriterien ohne nachträgliche Bedeutungsverschiebung ableitbar sind. Mehrteilige Versprechen erhalten einzelne Kriterien; unabhängige Versprechen werden getrennte Fälle.
 
 Eine Checkliste verlangt die Suche nach bestätigenden und widersprechenden Belegen, einschließlich späterer Korrekturen und Stellungnahmen des betroffenen Akteurs. „Keine Handlung gefunden“ ist zunächst eine Recherchelücke. Eine Aussage über das Ausbleiben einer Handlung braucht eine geeignete, ausreichend vollständige Dokumentationsgrundlage.
 
 ## 3. Datenmodell, Identität und Versionierung
 
-Die Implementierungsreferenz ist `docs/domain-model.md`; Beziehungen und Kardinalitäten stehen in `docs/domain-model-relations.md`. Dieser Abschnitt fasst die fachlichen Festlegungen zusammen. Die Anwendung bleibt eine lokale macOS-App für zunächst einen Benutzer, einen Fall und ein Versprechen, ohne Server oder Microservices.
+Die Implementierungsreferenz ist `docs/domain-model.md`; Beziehungen und Kardinalitäten stehen in `docs/domain-model-relations.md`. Dieser Abschnitt fasst die fachlichen Festlegungen zusammen. Die Anwendung bleibt eine lokale macOS-App für zunächst einen Benutzer, zunächst vollständige einzelne Fälle mit je einem Versprechen, ohne Server oder Microservices.
 
 **Aggregate und Identitäten:** `Case` ist Aggregate Root. Es enthält im MVP genau ein `Promise`, mehrere Kriterien, Quellen und Quellenfassungen, Handlungen/Entwicklungen, Evidenzverknüpfungen, ResearchTasks und Prüfungen. Actor, Source, Promise und ActionOrDevelopment haben stabile IDs. Unabhängige Versprechen erhalten separate Cases.
 
@@ -108,7 +109,7 @@ Im MVP kann dieselbe Person prüfen und freigeben; die Schritte bleiben getrennt
 
 ## 6. Realistischer MVP und Abnahmekriterien
 
-**Zwingend für MVP:** lokale Fallbearbeitung, manuelle Quellenaufnahme, Kriterien und Evidenzbeziehungen, neutrale Bewertung mit menschlicher Freigabe, ein austauschbarer KI-Anbieter für Skriptentwürfe, Satz-für-Satz-Quellenprüfung, versioniertes Prüfprotokoll und Export. Keine Konten, Cloud-Synchronisierung oder automatisierte Recherche nötig.
+**Zwingend für MVP:** lokale Fallbearbeitung, manuelle Quellenaufnahme, Kriterien und Evidenzbeziehungen, neutrale Bewertung mit menschlicher Freigabe, ein austauschbarer KI-Anbieter für Skriptentwürfe, Satz-für-Satz-Quellenprüfung, versioniertes Prüfprotokoll und Export. Keine Konten, Cloud-Synchronisierung oder automatisierte Bewertung oder Medienerzeugung nötig. Automatische Versprechenssuche ist seit Phase 5.1 Teil des Einstiegs, ohne diesen manuellen Abnahmeweg zu ersetzen.
 
 Der Export enthält ausschließlich ein menschlich freigegebenes Skript mit einer Zielzeit von ungefähr 30–60 Sekunden, eine Szenengrundlage mit noch festzulegenden Visualhinweisen, eine lesbare Quellenliste mit Fundstellen und einen maschinenlesbaren Fallbericht samt vollständigem Fallarchiv (JSON). Ein Quellenblatt ergänzt kurze Quellenkennungen im Skript. Noch kein fertiges Video. Zieldauer wird geschätzt; tatsächliche Sprechdauer ist erst mit Voiceover verifizierbar.
 
@@ -126,13 +127,13 @@ Zusätzlich müssen ein Fall mit unzureichender Evidenz korrekt als „nicht üb
 
 ## 7. Einfache macOS-Architektur
 
-**Empfehlung:** native SwiftUI-Anwendung, zunächst macOS 14 oder neuer, mit einer einzigen lokalen Anwendung und ohne eigenen Server. Umsetzung erst nach Abschluss der Spezifikationsphase.
+**Empfehlung:** native SwiftUI-Anwendung, zunächst macOS 14 oder neuer, mit einer einzigen lokalen Anwendung und ohne eigenen Server. Domain, Persistenz und UI sind implementiert; die neue Recherche bleibt ein getrenntes Modul.
 
 - **UI:** Fallformular, Quellenablage, Vergleichsansicht, Bewertungsprüfung und Skripteditor mit Quellenmarkierungen.
 - **Fachlogik:** eigenständige Swift-Module für Kriterien, Validierung, Freigaben und Export; unabhängig von UI und KI-Anbieter testbar.
 - **Persistenz:** SwiftData bildet das in `docs/domain-model.md` definierte Domain Model ab; fachliche Revisionen und CaseEvaluation-Snapshots bleiben unveränderlich. Importierte Dokumente liegen separat im Application-Support-Verzeichnis; SourceVersion speichert Dateireferenz/Hash. Stabile IDs, Schema-Migrationen und versionierte Export-/Backup-Pakete vorsehen.
 - **KI-Anbindung:** ein schmaler Anbieteradapter über URLSession, direkte HTTPS-Anfragen, strukturierte Antwortformate und feste Quellen-IDs. Antworten auf vorhandene IDs prüfen; keine automatische Freigabe durch das Modell.
-- **Zugangsdaten:** eigener API-Schlüssel im macOS-Schlüsselbund; keine Schlüssel in Projektdateien, Exporten oder Logs. Vor Übertragung wird ersichtlich, welche Auszüge an den Anbieter gehen. Nur notwendiges Quellenmaterial übertragen; Nutzungs- und Datenschutzbedingungen beachten.
+- **Zugangsdaten:** für den aktuellen Entwicklungsstand ausschließlich OPENAI_API_KEY im lokalen Prozess; macOS-Schlüsselbund ist ein späteres Distributionsziel; keine Schlüssel in Projektdateien, Exporten oder Logs. Vor Übertragung wird ersichtlich, welche Auszüge an den Anbieter gehen. Nur notwendiges Quellenmaterial übertragen; Nutzungs- und Datenschutzbedingungen beachten.
 - **Dateien/Netzwerk:** macOS-Sandbox mit gezieltem Dateiimport/-export und ausgehender Netzwerkberechtigung. Importierte Dokumente als Daten behandeln; keinen darin enthaltenen Anweisungen folgen.
 
 Die Cloud-Umgebung kann Dokumentation und plattformunabhängige Arbeit unterstützen. Native Builds, UI-Tests, Signierung und Medienfunktionen benötigen einen Mac mit passender Xcode-Version. Ein Linux-Cloud-Setup allein validiert die macOS-Anwendung nicht. Im MVP genügt lokale Ausführung auf dem Entwicklungs-Mac; öffentliche Distribution folgt später.
@@ -141,9 +142,9 @@ Die Cloud-Umgebung kann Dokumentation und plattformunabhängige Arbeit unterstü
 
 | Stufe | Umfang |
 | --- | --- |
-| **MVP — zwingend** | Ein Fall von manueller Erfassung bis zum geprüften Skript- und Quellenexport; lokale Speicherung und Wiederherstellung; ein KI-Adapter. |
-| **Version 2 — sinnvoll** | Mehrere Fälle und Filter, erleichterter Import ausgewählter amtlicher Quellen, OCR/Transkription mit Prüfung, Gegenlese-Workflow, TTS-Voiceover, Untertitel und einfache lokale Videovorlage mit Quellenanzeige. |
-| **Später — möglich** | Breite Rechercheautomatisierung, überwachte Aktualisierung von Fällen, weitere KI-Anbieter, aufwendigere Visuals, Teamfunktionen und optionale Synchronisierung. |
+| **MVP — umgesetzt / Phase 5.1** | Ein vollständiger Fall bis zum geprüften Skript- und Quellenexport; lokale Speicherung und Wiederherstellung; zusätzlich automatische Versprechenssuche mit ungeprüfter Inbox. |
+| **Nächste Phasen — geplant** | Automatische Beleg-/Gegenbelegrecherche, Validierungs- und Bewertungsentwürfe mit menschlicher Freigabe; anschließend Skript, Storyboard, TTS, Untertitel und Video. |
+| **Später — möglich** | Erweiterte Quellenabdeckung und überwachte Aktualisierung von Fällen, weitere KI-Anbieter, aufwendigere Visuals, Teamfunktionen und optionale Synchronisierung. |
 
 Automatische Veröffentlichungen und pauschale Ehrlichkeits-Rankings sind kein vorgesehenes Produktziel. Videoerzeugung beginnt erst, wenn der einzelne Faktencheck nachvollziehbar und reproduzierbar funktioniert.
 

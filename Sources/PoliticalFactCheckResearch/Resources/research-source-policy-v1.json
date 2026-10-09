@@ -1,0 +1,16 @@
+{
+  "version": "research-source-policy-v1",
+  "groups": [
+    {"id":"party-1","label":"oevp.at","domains":[{"host":"oevp.at","category":"officialParty"}]},
+    {"id":"party-2","label":"spoe.at","domains":[{"host":"spoe.at","category":"officialParty"}]},
+    {"id":"party-3","label":"fpoe.at","domains":[{"host":"fpoe.at","category":"officialParty"}]},
+    {"id":"party-4","label":"neos.eu","domains":[{"host":"neos.eu","category":"officialParty"}]},
+    {"id":"party-5","label":"gruene.at","domains":[{"host":"gruene.at","category":"officialParty"}]},
+    {"id":"institutions","label":"Institutionelle Quellen","domains":[
+      {"host":"parlament.gv.at","category":"parliament"},
+      {"host":"ris.bka.gv.at","category":"legalInformation"},
+      {"host":"bundeskanzleramt.gv.at","category":"federalGovernment"},
+      {"host":"oesterreich.gv.at","category":"administration"}
+    ]}
+  ]
+}

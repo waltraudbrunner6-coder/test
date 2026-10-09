@@ -4,6 +4,7 @@ import PoliticalFactCheckCore
 import PoliticalFactCheckPersistence
 import PoliticalFactCheckScripting
 import PoliticalFactCheckExport
+import PoliticalFactCheckResearch
 
 @MainActor
 public final class CaseWorkspaceModel: ObservableObject {
@@ -22,6 +23,12 @@ public final class CaseWorkspaceModel: ObservableObject {
     private var openAIPreviewCaseID: EntityID<PoliticalFactCheckCore.Case>?
     private var openAIPreviewChangeToken: String?
 
+
+    @Published public private(set) var researchInbox: [ResearchInboxItem] = []
+    @Published public private(set) var isDiscoveringPromises = false
+    @Published public private(set) var discoveryMessage: String?
+    @Published public private(set) var discoveryErrorMessage: String?
+    private var discoveryTask: Task<PromiseDiscoveryResult, Error>?
 
     private static let reviewerNameKey = "politicalFactCheck.reviewerName"
     private static let reviewerIDKey = "politicalFactCheck.reviewerID"
@@ -68,6 +75,69 @@ public final class CaseWorkspaceModel: ObservableObject {
             selectedCaseID = wanted ?? cases.first?.id
             errorMessage = nil
             loadSelectedCase()
+            reloadResearchInbox()
+        } catch { present(error) }
+    }
+
+    public func reloadResearchInbox() {
+        guard let store else { return }
+        do { researchInbox = try store.researchInbox() }
+        catch { discoveryErrorMessage = (error as? DiscoveryError)?.displayMessage ?? "Recherche-Inbox konnte nicht geladen werden." }
+    }
+
+    public func cancelDiscovery() { discoveryTask?.cancel() }
+
+    public func discoverPromises(provider: any PromiseDiscoveryProvider = OpenAIPromiseDiscoveryProvider(),
+                                 policy: SourcePolicy? = nil, currentDate: Date = Date()) async {
+        guard !isDiscoveringPromises else { return }
+        guard let store else { discoveryErrorMessage = "Lokaler Store ist nicht verfügbar."; return }
+        isDiscoveringPromises = true; discoveryErrorMessage = nil; discoveryMessage = nil
+        defer { isDiscoveringPromises = false; discoveryTask = nil }
+        do {
+            let resolvedPolicy = try policy ?? SourcePolicy.version1()
+            let request = PromiseDiscoveryRequest(sourcePolicy: resolvedPolicy, currentDate: currentDate)
+            try request.validate()
+            let task = Task { try await provider.discoverPromises(request: request) }
+            discoveryTask = task
+            let result = try await withTaskCancellationHandler(operation: { try await task.value }, onCancel: { task.cancel() })
+            try Task.checkCancellation()
+            guard !task.isCancelled else { throw CancellationError() }
+            var inserted = 0; var duplicates = 0; var failures = 0; var messages: [String] = []
+            // No await during imports: each complete candidate owns one store transaction.
+            for outcome in result.outcomes {
+                guard request.sourcePolicy.groups.contains(outcome.group) else { failures += 1; continue }
+                if let error = outcome.error { failures += 1; messages.append(outcome.group.label + ": " + error.displayMessage); continue }
+                guard outcome.searched, outcome.candidates.count <= request.maxCandidates else { failures += 1; continue }
+                failures += outcome.rejections.count
+                for rejection in outcome.rejections { messages.append(outcome.group.label + ": " + rejection.reason.displayMessage) }
+                for candidate in outcome.candidates {
+                    do {
+                        let record = DiscoveryCandidateRecord(request: request, groupID: outcome.group.id,
+                            provider: provider.identifier.value, promptVersion: result.promptVersion,
+                            candidate: candidate, sources: outcome.sources, citations: outcome.citations)
+                        switch try store.insertDiscoveryCandidate(record) {
+                        case .inserted: inserted += 1
+                        case .duplicate: duplicates += 1
+                        }
+                    } catch {
+                        failures += 1
+                        messages.append((error as? DiscoveryError)?.displayMessage ?? "Kandidat konnte nicht atomar gespeichert werden.")
+                    }
+                }
+            }
+            discoveryMessage = "Recherche abgeschlossen: \(inserted) neue Kandidaten, \(duplicates) Duplikate, \(failures) Fehler/verworfene Einträge. " +
+                result.outcomes.map { "\($0.group.label): \($0.candidates.count) gültige Funde" }.joined(separator: "; ")
+            if !messages.isEmpty { discoveryErrorMessage = messages.joined(separator: "\n") }
+            reload()
+        } catch is CancellationError { discoveryMessage = "Recherche abgebrochen. Keine laufenden Ergebnisse übernommen." }
+        catch { discoveryErrorMessage = (error as? DiscoveryError)?.displayMessage ?? "Die automatische Recherche ist fehlgeschlagen." }
+    }
+
+    public func discardDiscoveryCandidate(id: EntityID<PoliticalFactCheckCore.Case>) {
+        do {
+            guard let store, researchInbox.contains(where: { $0.id == id }) else { return }
+            try store.deleteDraftCase(id: id)
+            reload()
         } catch { present(error) }
     }
 

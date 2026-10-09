@@ -7,6 +7,7 @@ import PoliticalFactCheckPersistence
 struct MainWindowView: View {
     @EnvironmentObject private var workspace: CaseWorkspaceModel
     @State private var sheet: EditorSheet?
+    @State private var showsResearchInbox = true
 
     var body: some View {
         VStack(spacing: 0) {
@@ -16,7 +17,11 @@ struct MainWindowView: View {
             NavigationSplitView {
                 sidebar
             } detail: {
-                if let politicalCase = workspace.selectedCase,
+                if showsResearchInbox {
+                    ResearchInboxView(workspace: workspace) { id in
+                        workspace.selectCase(id); showsResearchInbox = false
+                    }
+                } else if let politicalCase = workspace.selectedCase,
                    let graph = workspace.selectedContext {
                     CaseDetailView(politicalCase: politicalCase, graph: graph,
                                    workspace: workspace, sheet: $sheet)
@@ -30,10 +35,16 @@ struct MainWindowView: View {
         }
         .toolbar {
             ToolbarItemGroup {
+                Button("Automatisch Fälle finden", systemImage: "sparkle.magnifyingglass") {
+                    showsResearchInbox = true
+                    Task { await workspace.discoverPromises() }
+                }.disabled(workspace.isDiscoveringPromises)
+                Button("Recherche-Inbox", systemImage: "tray") { showsResearchInbox = true }
+
                 Button("Neu laden", systemImage: "arrow.clockwise") { workspace.reload() }
                     .help("Lokale Fälle neu laden")
                 Button("Redaktionspaket importieren", systemImage: "square.and.arrow.down") { chooseEditorialPackage() }
-                Button("Neuer Fall", systemImage: "plus") { sheet = .newCase }
+                Button("Neuer Fall", systemImage: "plus") { showsResearchInbox = false; sheet = .newCase }
                     .help("Einen ungeprüften Faktencheck-Fall anlegen")
                 Button("Prüfername", systemImage: "person.crop.circle") { sheet = .reviewer }
                     .help("Lokalen menschlichen Prüfer festlegen")
@@ -57,7 +68,7 @@ struct MainWindowView: View {
     private var sidebar: some View {
         List(selection: Binding(
             get: { workspace.selectedCaseID },
-            set: { workspace.selectCase($0) }
+            set: { workspace.selectCase($0); showsResearchInbox = false }
         )) {
             ForEach(workspace.cases, id: \.id) { politicalCase in
                 CaseSidebarRow(politicalCase: politicalCase,
@@ -208,4 +219,63 @@ extension CaseWorkflowState {
         promiseID: EntityID<Promise>(), currentPromiseRevisionID: EntityID<PromiseRevision>())
     CaseSidebarRow(politicalCase: politicalCase, reviewState: .reviewRequired)
         .padding().frame(width: 300)
+}
+
+struct ResearchInboxView: View {
+    @ObservedObject var workspace: CaseWorkspaceModel
+    var openCase: (EntityID<PoliticalFactCheckCore.Case>) -> Void
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Recherche-Inbox").font(.largeTitle)
+                Text("KI-gefundene Fälle sind ungeprüfte Recherchekandidaten. Quellen und Kontext werden in den nächsten automatischen Prüfschritten weiter validiert.")
+                    .foregroundStyle(.secondary)
+                HStack {
+                    Button("Automatisch Fälle finden") { Task { await workspace.discoverPromises() } }
+                        .buttonStyle(.borderedProminent).disabled(workspace.isDiscoveringPromises)
+                    if workspace.isDiscoveringPromises {
+                        ProgressView().controlSize(.small)
+                        Text("Quellengruppen werden recherchiert …")
+                        Button("Abbrechen") { workspace.cancelDiscovery() }
+                    }
+                }
+                if let message = workspace.discoveryMessage { Text(message).textSelection(.enabled) }
+                if let error = workspace.discoveryErrorMessage { Text(error).foregroundStyle(.orange).textSelection(.enabled) }
+                if workspace.researchInbox.isEmpty { Text("Noch keine ungeprüften Recherchekandidaten. Auch null Funde sind ein gültiges Rechercheergebnis.").foregroundStyle(.secondary) }
+                ForEach(workspace.researchInbox) { item in
+                    ResearchCandidateCard(item: item, open: { openCase(item.id) }, discard: { workspace.discardDiscoveryCandidate(id: item.id) })
+                }
+            }.padding(24).frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
+private struct ResearchCandidateCard: View {
+    let item: ResearchInboxItem
+    let open: () -> Void
+    let discard: () -> Void
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Ungeprüfter KI-Recherchekandidat").font(.caption).foregroundStyle(.orange)
+            Text(item.candidate.title).font(.headline)
+            Text(item.candidate.exactQuote).textSelection(.enabled)
+            Text("Sprecher: " + (item.candidate.speakerName ?? "unbekannt") + " · Partei: " + (item.candidate.partyName ?? "unbekannt"))
+            Text("Aussage: " + (item.candidate.statementDate ?? "unbekannt") + " · Genauigkeit: " + (item.candidate.statementDatePrecision ?? "unbekannt"))
+            Text("Prüfbarkeit: \(item.score)/100 — keine Wahrheitsbewertung")
+            Text(item.candidate.whyCheckable).foregroundStyle(.secondary)
+            if let source = item.source, let url = URL(string: source.url) {
+                Text(source.category?.displayName ?? "Quelle").font(.caption)
+                Link(item.candidate.sourceTitle ?? source.title ?? source.domain, destination: url)
+                Text(source.url).font(.caption).textSelection(.enabled)
+            }
+            ForEach(Array(item.candidate.uncertainties.enumerated()), id: \.offset) { _, uncertainty in
+                Text("Unsicherheit: " + uncertainty).foregroundStyle(.secondary)
+            }
+            HStack {
+                Button("Fall öffnen", action: open)
+                Button("Kandidat verwerfen", role: .destructive, action: discard)
+            }
+        }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
+            .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+    }
 }

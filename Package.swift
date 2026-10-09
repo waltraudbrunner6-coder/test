@@ -3,7 +3,10 @@ import PackageDescription
 
 var products: [Product] = [.library(name: "PoliticalFactCheckCore", targets: ["PoliticalFactCheckCore"])]
 products.append(.library(name: "PoliticalFactCheckScripting", targets: ["PoliticalFactCheckScripting"]))
+products.append(.library(name: "PoliticalFactCheckResearch", targets: ["PoliticalFactCheckResearch"]))
 var targets: [Target] = [
+    .target(name: "PoliticalFactCheckResearch", dependencies: ["PoliticalFactCheckCore"], resources: [.process("Resources")]),
+    .testTarget(name: "PoliticalFactCheckResearchTests", dependencies: ["PoliticalFactCheckCore", "PoliticalFactCheckResearch"]),
     .target(name: "PoliticalFactCheckCore"),
     .target(name: "PoliticalFactCheckScripting", dependencies: ["PoliticalFactCheckCore"], resources: [.process("Resources")]),
     .testTarget(name: "PoliticalFactCheckScriptingTests", dependencies: ["PoliticalFactCheckCore", "PoliticalFactCheckScripting"]),
@@ -15,11 +18,11 @@ targets.append(.target(name: "PoliticalFactCheckExport", dependencies: ["Politic
 targets.append(.testTarget(name: "PoliticalFactCheckExportTests", dependencies: ["PoliticalFactCheckCore", "PoliticalFactCheckScripting", "PoliticalFactCheckExport"]))
 products.append(.library(name: "PoliticalFactCheckPersistence", targets: ["PoliticalFactCheckPersistence"]))
 products.append(.library(name: "PoliticalFactCheckAppModel", targets: ["PoliticalFactCheckAppModel"]))
-targets.append(.target(name: "PoliticalFactCheckPersistence", dependencies: ["PoliticalFactCheckCore", "PoliticalFactCheckScripting", "PoliticalFactCheckExport"]))
-targets.append(.target(name: "PoliticalFactCheckAppModel", dependencies: ["PoliticalFactCheckCore", "PoliticalFactCheckPersistence", "PoliticalFactCheckScripting", "PoliticalFactCheckExport"]))
-targets.append(.testTarget(name: "PoliticalFactCheckAppModelTests", dependencies: ["PoliticalFactCheckCore", "PoliticalFactCheckPersistence", "PoliticalFactCheckAppModel", "PoliticalFactCheckScripting", "PoliticalFactCheckExport"]))
+targets.append(.target(name: "PoliticalFactCheckPersistence", dependencies: ["PoliticalFactCheckCore", "PoliticalFactCheckScripting", "PoliticalFactCheckExport", "PoliticalFactCheckResearch"]))
+targets.append(.target(name: "PoliticalFactCheckAppModel", dependencies: ["PoliticalFactCheckCore", "PoliticalFactCheckPersistence", "PoliticalFactCheckScripting", "PoliticalFactCheckExport", "PoliticalFactCheckResearch"]))
+targets.append(.testTarget(name: "PoliticalFactCheckAppModelTests", dependencies: ["PoliticalFactCheckCore", "PoliticalFactCheckPersistence", "PoliticalFactCheckAppModel", "PoliticalFactCheckScripting", "PoliticalFactCheckExport", "PoliticalFactCheckResearch"]))
 targets.append(.testTarget(name: "PoliticalFactCheckPersistenceTests",
-    dependencies: ["PoliticalFactCheckCore", "PoliticalFactCheckPersistence", "PoliticalFactCheckScripting", "PoliticalFactCheckExport"]))
+    dependencies: ["PoliticalFactCheckCore", "PoliticalFactCheckPersistence", "PoliticalFactCheckScripting", "PoliticalFactCheckExport", "PoliticalFactCheckResearch"]))
 #endif
 
 let package = Package(
