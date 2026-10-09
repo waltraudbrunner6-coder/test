@@ -75,6 +75,7 @@ public final class LocalCaseStore {
             try context.save()
         } catch {
             context.rollback()
+            if let error = error as? ResearchReviewError { throw error }
             if let error = error as? CaseResearchError { throw error }
             if let error = error as? EditorialPackageError { throw error }
             if let error = error as? PersistenceError { throw error }

@@ -7,3 +7,7 @@ public typealias DeepResearchRecordV1 = PoliticalFactCheckResearch.DeepResearchR
 public typealias EvidenceProposal = PoliticalFactCheckResearch.EvidenceProposal
 public typealias ProposedCriterionAssessment = PoliticalFactCheckResearch.ProposedCriterionAssessment
 public typealias ProposedCaseAssessment = PoliticalFactCheckResearch.ProposedCaseAssessment
+public typealias ResearchReviewPlan = PoliticalFactCheckResearch.ResearchReviewPlan
+public typealias ResearchReviewItemState = PoliticalFactCheckResearch.ResearchReviewItemState
+
+public typealias ProposedDevelopment = PoliticalFactCheckResearch.ProposedDevelopment

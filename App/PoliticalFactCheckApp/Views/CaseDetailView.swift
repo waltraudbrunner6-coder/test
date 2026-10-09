@@ -54,6 +54,9 @@ struct CaseDetailView: View {
     private var automatedResearchSection: some View {
         section("Automatische Recherche", systemImage: "magnifyingglass") {
             if let dossier = workspace.researchDossiers[politicalCase.id] {
+                if let plan = workspace.researchReviewPlan {
+                    ResearchReviewQueueView(workspace: workspace, plan: plan).id(politicalCase.id)
+                } else if let blocker = workspace.researchReviewBlocker { Text(blocker).foregroundStyle(.orange) }
                 ResearchDossierView(dossier: dossier)
             } else if politicalCase.workflowState == .candidate,
                       workspace.researchInbox.contains(where: { $0.id == politicalCase.id }) {
@@ -957,5 +960,198 @@ private struct ResearchEvidenceCard: View {
             }
             Text(evidence.uncertainties.joined(separator: " · ")).foregroundStyle(.secondary)
         }.padding(12).background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
+    }
+}
+
+private struct ResearchReviewQueueView: View {
+    @ObservedObject var workspace: CaseWorkspaceModel
+    let plan: ResearchReviewPlan
+    @State private var contextText = ""
+    @State private var acknowledgeCounterEvidence = false
+    @State private var explicitConfirmation = false
+    @State private var checkedCriteria: Set<EntityID<CriterionEvaluation>> = []
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Recherche prüfen · KI-Review").font(.title2)
+            Text("AI recherchiert. Mensch prüft die vorgeschlagenen Quellen und Schlussfolgerungen. Die App übernimmt geprüfte Inhalte ohne erneute manuelle Dateneingabe.").font(.caption)
+            Text("\(plan.completedSteps)/6 Schritte · Original: \(label(plan.originalSource)) · Kriterien: \(plan.criteria.filter { $0.state == .reviewed }.count)/\(plan.criterionIDs.count) · Fundstellen: \(plan.excerptIDs.count)/\(plan.evidenceSources.count) · Evidenz: \(plan.evidenceIDs.count)/\(plan.evidence.count) · Bewertung: \(label(plan.assessment))").font(.caption)
+            original
+            criteria
+            sources
+            developments
+            evidence
+            assessment
+        }.padding().background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+        .onAppear { if contextText.isEmpty { contextText = plan.record.result.originalSourceReview.context } }
+    }
+    private func label(_ state: ResearchReviewItemState) -> String {
+        switch state {
+        case .open: return "offen"
+        case .ready: return "bereit"
+        case .reviewed: return "geprüft"
+        case .notUsed: return "nicht verwendet"
+        case .rejected: return "abgelehnt"
+        case .blocked: return "blockiert"
+        }
+    }
+    private var original: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("1. Originalaussage").font(.headline)
+            Text(plan.record.discovery.candidate.exactQuote).textSelection(.enabled)
+            Text("Sprecher: " + (plan.record.discovery.candidate.speakerName ?? "unbekannt") + " · Partei zum Aussagezeitpunkt: " + (plan.record.discovery.candidate.partyName ?? "unbekannt"))
+            Text(plan.record.discovery.candidate.locator)
+            Text("Aussagezeit: " + (plan.record.result.originalSourceReview.statementDate ?? "unbekannt"))
+            Text(plan.record.result.originalSourceReview.context)
+            Text(plan.record.result.originalSourceReview.uncertainties.joined(separator: " · ")).font(.caption)
+            if let url = URL(string: plan.record.discovery.candidate.sourceURL) { Link(plan.record.discovery.candidate.sourceTitle ?? "Originalquelle", destination: url) }
+            if let id = plan.originalExcerptID, plan.originalSource != .reviewed {
+                HStack {
+                    Button("Originalfundstelle geprüft") { workspace.performResearchReview(.excerpt(id, reject: false)) }
+                        .disabled(workspace.selectedContext?.excerpts.contains { $0.id == id && $0.state == .rejected } == true || plan.originalSource == .ready)
+                    Button("Originalfundstelle ablehnen") { workspace.performResearchReview(.excerpt(id, reject: true)) }.disabled(plan.originalSource == .ready)
+                    Button("Originalzitat bestätigen und dokumentieren") { workspace.performResearchReview(.original) }.disabled(plan.originalSource != .ready)
+                }
+            }
+        }
+    }
+    private var criteria: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("2. Prüfkriterien auswählen und bestätigen").font(.headline)
+            ForEach(plan.record.result.proposedCriteria, id: \.criterionKey) { criterion in
+                VStack(alignment: .leading) {
+                    Text(criterion.goal + " · " + label(plan.criteria.first { $0.key == criterion.criterionKey }?.state ?? .blocked))
+                    Text("Zielgruppe: " + (criterion.targetGroup ?? "unbekannt") + " · Ausgangslage: " + (criterion.baseline ?? "unbekannt")).font(.caption)
+                    Text("Frist: " + (criterion.deadline ?? "unbekannt") + " · Bedingungen: " + (criterion.conditions?.joined(separator: "; ") ?? "unbekannt")).font(.caption)
+                    Text((criterion.isCore ? "Kernkriterium · " : "Teilbestandteil · ") + criterion.materialityRule).font(.caption)
+                    Text(criterion.uncertainties.joined(separator: " · ")).foregroundStyle(.secondary)
+                    HStack {
+                        Button("Übernehmen") { workspace.performResearchReview(.criterion(criterion.criterionKey, use: true)) }
+                        Button("Nicht verwenden") { workspace.performResearchReview(.criterion(criterion.criterionKey, use: false)) }
+                    }.disabled(workspace.selectedCase?.workflowState != .documented || plan.criteria.first { $0.key == criterion.criterionKey }?.state == .notUsed)
+                }
+            }
+            TextField("Prüfrahmen / Kontext prüfen oder korrigieren", text: $contextText, axis: .vertical)
+            Text("Dieser Schritt bestätigt auch die Sprecherzuordnung anhand der geprüften Originalfundstelle und die ausdrücklich gewählten Kriterien.").font(.caption)
+            Button("Prüfrahmen und gewählte Kriterien bestätigen") { workspace.performResearchReview(.frame(contextText)) }
+                .disabled(workspace.selectedCase?.workflowState != .documented)
+        }
+    }
+    private var sources: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("3. Benötigte Fundstellen prüfen").font(.headline)
+            Text("Unbenutzte Fundstellen können ungeprüft bleiben. Ablehnen bedeutet eine ausdrückliche fachliche Ablehnung.").font(.caption)
+            ForEach(plan.record.result.excerpts, id: \.excerptKey) { excerpt in
+                VStack(alignment: .leading) {
+                    Text(excerpt.text).textSelection(.enabled)
+                    Text(excerpt.locator + " · " + excerpt.context + " · Ereignis: " + (excerpt.eventDate ?? "unbekannt")).font(.caption)
+                    Text("Verwendung: " + plan.record.result.evidenceProposals.filter { $0.excerptKeys.contains(excerpt.excerptKey) }.map { $0.evidenceKey }.joined(separator: ", ")).font(.caption)
+                    Text(excerpt.uncertainties.joined(separator: " · ")).foregroundStyle(.secondary)
+                    if let source = plan.record.result.sources.first(where: { $0.claim.sourceKey == excerpt.sourceKey }), let url = URL(string: source.searchSource.url) { Link(source.claim.title ?? source.searchSource.url, destination: url) }
+                    Text(label(plan.evidenceSources.first { $0.key == excerpt.excerptKey }?.state ?? .blocked))
+                    if let raw = plan.record.bindings?.excerpts[excerpt.excerptKey] {
+                        HStack {
+                            Button("Fundstelle geprüft") { workspace.performResearchReview(.excerpt(EntityID<SourceExcerpt>(raw), reject: false)) }
+                            Button("Fundstelle ablehnen") { workspace.performResearchReview(.excerpt(EntityID<SourceExcerpt>(raw), reject: true)) }
+                        }.disabled(plan.evidenceSources.first { $0.key == excerpt.excerptKey }?.state != .ready)
+                    }
+                }
+            }
+        }
+    }
+    private var developments: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("4. Entwicklungen").font(.headline)
+            ForEach(plan.record.result.developments, id: \.developmentKey) { development in
+                ResearchDevelopmentReviewCard(workspace: workspace, development: development,
+                    state: plan.developments.first { $0.key == development.developmentKey }?.state ?? .blocked)
+
+            }
+        }
+    }
+    private var evidence: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("5. Evidenzzuordnung").font(.headline)
+            ForEach(plan.record.result.evidenceProposals, id: \.evidenceKey) { proposal in
+                ResearchEvidenceCard(evidence: proposal, dossier: plan.record)
+                Text("Geprüfte Fundstellen: " + proposal.excerptKeys.compactMap { plan.excerptIDs[$0]?.rawValue.uuidString }.joined(separator: ", ")).font(.caption)
+                if let key = proposal.developmentKey { Text("Geprüfte Entwicklung: " + (plan.actionIDs[key]?.rawValue.uuidString ?? "noch ungeprüft")).font(.caption) }
+                HStack {
+                    Button("Evidenz geprüft & übernehmen") { workspace.performResearchReview(.evidence(proposal.evidenceKey, use: true)) }
+                        .disabled(plan.evidence.first { $0.key == proposal.evidenceKey }?.state != .ready)
+                    Button("Evidenz nicht verwenden") { workspace.performResearchReview(.evidence(proposal.evidenceKey, use: false)) }
+                        .disabled(plan.evidence.first { $0.key == proposal.evidenceKey }?.state == .reviewed || plan.evidence.first { $0.key == proposal.evidenceKey }?.state == .notUsed)
+                }
+                Text(label(plan.evidence.first { $0.key == proposal.evidenceKey }?.state ?? .blocked))
+            }
+        }
+    }
+    private var assessment: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("6. KI-Bewertungsvorschlag – menschliche Prüfung erforderlich").font(.headline)
+            Text("Bewertungsstichtag: " + plan.record.researchCutoff.formatted(date: .numeric, time: .shortened))
+            Text("Gesamt: " + (plan.record.result.overallAssessmentDraft.suggestedCategory?.rawValue ?? "KI gibt keine belastbare Empfehlung."))
+            Text(plan.record.result.overallAssessmentDraft.rationale)
+            ForEach(plan.record.result.criterionAssessmentDrafts, id: \.criterionKey) { row in
+                Text(row.criterionKey + " · " + (row.suggestedCategory?.rawValue ?? "Keine belastbare Empfehlung") + " · " + row.confidence.rawValue)
+                Text(row.rationale)
+                Text("Pro: " + row.supportingEvidenceKeys.joined(separator: ", ") + " · Contra: " + row.counterEvidenceKeys.joined(separator: ", ")).font(.caption)
+                Text((row.uncertainties + row.notVerifiableReasons.map { $0.rawValue }).joined(separator: " · ")).font(.caption)
+            }
+            ForEach(Array(plan.blockingIssues.enumerated()), id: \.offset) { _, blocker in Text(blocker).foregroundStyle(.orange) }
+            ForEach(Array(plan.warnings.enumerated()), id: \.offset) { _, warning in Text(warning).foregroundStyle(.orange) }
+            if !plan.warnings.isEmpty { Toggle("Nicht übernommene Gegenbelege bewusst geprüft", isOn: $acknowledgeCounterEvidence) }
+            if let evaluation = workspace.selectedContext?.caseEvaluations.last {
+                evaluationReview(evaluation)
+            } else {
+                Button("Bewertungsentwurf mit angezeigtem Stichtag übernehmen") { workspace.performResearchReview(.assessment(acknowledgeOmittedCounterEvidence: acknowledgeCounterEvidence)) }
+                    .disabled(plan.assessment != .ready || (!plan.warnings.isEmpty && !acknowledgeCounterEvidence))
+                Text("Keine automatische Freigabe. Manueller Bewertungseditor bleibt verfügbar.").font(.caption)
+            }
+        }
+    }
+    private func evaluationReview(_ evaluation: CaseEvaluation) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(evaluation.status == .approved ? "Menschlich freigegeben – Skript erzeugen ist im bestehenden Skriptbereich verfügbar." : "Menschlicher Bewertungsentwurf")
+            Text(evaluation.rationale.value)
+            ForEach(workspace.selectedContext?.criterionEvaluations.filter { $0.caseEvaluationID == evaluation.id } ?? [], id: \.id) { child in
+                Text(child.rationale.value + " · " + child.category.displayName)
+                Text("Pro: " + child.evidenceLinkIDs.map { $0.rawValue.uuidString }.joined(separator: ", ") + " · Contra: " + child.counterEvidenceLinkIDs.map { $0.rawValue.uuidString }.joined(separator: ", ")).font(.caption)
+                Text(child.uncertainties.map { $0.value }.joined(separator: " · ")).font(.caption)
+                Toggle("Diese Kriteriumsbewertung geprüft", isOn: Binding(get: { checkedCriteria.contains(child.id) }, set: { value in
+                    if value { checkedCriteria.insert(child.id) } else { checkedCriteria.remove(child.id) }
+                })).disabled(evaluation.status != .draft)
+            }
+            if evaluation.status == .draft {
+                Toggle("Ich habe Originalquelle, verwendete Belege, Gegenbelege, Unsicherheiten und alle Kriteriumsbewertungen geprüft.", isOn: $explicitConfirmation)
+                Button("Bewertung vollständig geprüft und freigeben") {
+                    workspace.performResearchReview(.approval(evaluation.id, checked: checkedCriteria, confirmation: explicitConfirmation, acknowledgeOmittedCounterEvidence: acknowledgeCounterEvidence))
+                }.disabled(!explicitConfirmation || checkedCriteria != Set(evaluation.criterionEvaluationIDs) || (!plan.warnings.isEmpty && !acknowledgeCounterEvidence))
+            }
+        }
+    }
+}
+
+private struct ResearchDevelopmentReviewCard: View {
+    @ObservedObject var workspace: CaseWorkspaceModel
+    let development: ProposedDevelopment
+    let state: ResearchReviewItemState
+    @State private var scope = ""
+    @State private var eventDate = ""
+    var body: some View {
+        VStack(alignment: .leading) {
+            Text(development.title + " · " + development.type.rawValue + " · " + development.proceduralState)
+            Text(development.description)
+            Text("Fundstellen: " + development.excerptKeys.joined(separator: ", ")).font(.caption)
+            Text(development.uncertainties.joined(separator: " · "))
+            TextField("Geprüfter Umfang – fehlende Angaben ergänzen", text: $scope)
+            TextField("Geprüftes Ereignisdatum: JJJJ, JJJJ-MM oder JJJJ-MM-TT", text: $eventDate)
+            HStack {
+                Button("Übernehmen und prüfen") { workspace.performResearchReview(.correctedDevelopment(development.developmentKey, scope: scope, eventDate: eventDate)) }
+                    .disabled(state != .ready || scope.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || eventDate.isEmpty)
+                Button("Nicht verwenden") { workspace.performResearchReview(.development(development.developmentKey, use: false)) }
+                    .disabled(state == .reviewed || state == .notUsed)
+            }
+            Text(state == .reviewed ? "menschlich geprüft" : state == .notUsed ? "nicht verwendet" : "Fundstellen und Handlungsfelder prüfen")
+        }.onAppear { scope = development.scope ?? ""; eventDate = development.eventDate ?? "" }
     }
 }

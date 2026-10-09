@@ -167,3 +167,7 @@ Automatische Veröffentlichungen und pauschale Ehrlichkeits-Rankings sind kein v
 ## 10. Festgelegter Rahmen für den nächsten Schritt
 
 Zunächst einen klar formulierten, zeitlich überprüfbaren Einzelfall mit zugänglichen Originalquellen auswählen und die Methodik daran manuell erproben. Danach Datenfelder und Freigaberegeln anhand des Falls präzisieren. Es gibt noch keine Entscheidung für einen KI-Anbieter oder einen konkreten politischen Fall; diese Wahl blockiert die Produktspezifikation nicht. Anwendungscode und Videoautomatisierung beginnen erst in einer folgenden Phase.
+
+### Phase 5.3 – kompakte Rechercheprüfung
+
+AI recherchiert. Mensch prüft die vorgeschlagenen Quellen und Schlussfolgerungen. Die App übernimmt geprüfte Inhalte ohne erneute manuelle Dateneingabe. Eine lokale, abgeleitete Review Queue orchestriert bestehende Core-Prüfungen; keine zweite Wahrheitslogik oder Persistenz-State-Machine. Neue geprüfte Revisionen werden explizit zu den erhaltenen KI-Drafts zurückverknüpft. Stichtag, nicht übernommene Gegenbelege und Kriterienbewertungen werden vor einer expliziten menschlichen Freigabe angezeigt. Details: [research-review-queue.md](research-review-queue.md).

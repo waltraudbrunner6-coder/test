@@ -197,6 +197,50 @@ public final class CaseWorkspaceModel: ObservableObject {
         } catch { researchErrorMessage = (error as? CaseResearchError)?.displayMessage ?? "Vertiefung konnte nicht gestartet werden." }
     }
 
+    public var researchReviewPlan: ResearchReviewPlan? {
+        guard let graph = selectedContext, let id = selectedCaseID, let record = researchDossiers[id] else { return nil }
+        return try? ResearchReviewPlan(graph: graph, record: record)
+    }
+    public var researchReviewBlocker: String? {
+        guard let graph = selectedContext, let id = selectedCaseID, let record = researchDossiers[id] else { return nil }
+        do { _ = try ResearchReviewPlan(graph: graph, record: record); return nil }
+        catch { return (error as? ResearchReviewError)?.displayMessage ?? ResearchReviewError.staleResearch.displayMessage }
+    }
+    @discardableResult
+    public func performResearchReview(_ command: ResearchReviewCommand) -> Bool {
+        do {
+            guard let store, let id = selectedCaseID else { throw WorkspaceInputError.caseUnavailable }
+            let reviewer = try currentReviewer(), now = Date()
+            switch command {
+            case .excerpt(let excerpt, let reject):
+                try store.reviewResearchExcerpt(caseID: id, excerptID: excerpt, reject: reject, reviewer: reviewer, at: now)
+            case .original:
+                try store.reviewResearchOriginal(caseID: id, reviewer: reviewer, at: now)
+            case .criterion(let key, let use):
+                try store.selectResearchCriterion(caseID: id, key: key, use: use, reviewer: reviewer, at: now)
+            case .frame(let text):
+                try store.confirmResearchFrame(caseID: id, contextText: NonEmptyText(text), reviewer: reviewer, at: now)
+            case .development(let key, let use):
+                try store.reviewResearchDevelopment(caseID: id, key: key, use: use, reviewer: reviewer, at: now)
+            case .correctedDevelopment(let key, let scope, let event):
+                try store.reviewResearchDevelopment(caseID: id, key: key, use: true, scope: NonEmptyText(scope),
+                    eventDate: DiscoveryDates.value(event, role: .event), reviewer: reviewer, at: now)
+            case .evidence(let key, let use):
+                try store.adoptResearchEvidence(caseID: id, key: key, use: use, reviewer: reviewer, at: now)
+            case .assessment(let acknowledge):
+                try store.materializeResearchAssessment(caseID: id, acknowledgeOmittedCounterEvidence: acknowledge, reviewer: reviewer, at: now)
+            case .approval(let evaluation, let checked, let confirmation, let acknowledge):
+                try store.approveResearchEvaluation(caseID: id, evaluationID: evaluation, checkedCriterionIDs: checked,
+                    explicitConfirmation: confirmation, acknowledgeOmittedCounterEvidence: acknowledge, reviewer: reviewer, at: now)
+            }
+            reload(selecting: id)
+            return true
+        } catch {
+            errorMessage = (error as? ResearchReviewError)?.displayMessage ?? WorkspaceErrorMessage.describe(error)
+            return false
+        }
+    }
+
     public func selectCase(_ id: EntityID<PoliticalFactCheckCore.Case>?) {
         selectedCaseID = id
         loadSelectedCase()
@@ -1032,4 +1076,16 @@ enum WorkspaceInputError: Error {
     case invalidURL
     case quoteUnavailable
     case storeUnavailable
+}
+
+public enum ResearchReviewCommand {
+    case excerpt(EntityID<SourceExcerpt>, reject: Bool)
+    case original
+    case criterion(String, use: Bool)
+    case frame(String)
+    case development(String, use: Bool)
+    case correctedDevelopment(String, scope: String, eventDate: String)
+    case evidence(String, use: Bool)
+    case assessment(acknowledgeOmittedCounterEvidence: Bool)
+    case approval(EntityID<CaseEvaluation>, checked: Set<EntityID<CriterionEvaluation>>, confirmation: Bool, acknowledgeOmittedCounterEvidence: Bool)
 }
