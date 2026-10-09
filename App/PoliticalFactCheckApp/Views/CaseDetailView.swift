@@ -33,6 +33,7 @@ struct CaseDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 overviewSection
+                automatedResearchSection
                 promiseSection
                 readinessSection
                 criteriaSection
@@ -48,6 +49,21 @@ struct CaseDetailView: View {
             .frame(maxWidth: 900, alignment: .leading)
         }
         .navigationTitle(politicalCase.title.value)
+    }
+
+    private var automatedResearchSection: some View {
+        section("Automatische Recherche", systemImage: "magnifyingglass") {
+            if let dossier = workspace.researchDossiers[politicalCase.id] {
+                ResearchDossierView(dossier: dossier)
+            } else if politicalCase.workflowState == .candidate,
+                      workspace.researchInbox.contains(where: { $0.id == politicalCase.id }) {
+                Text("KI-Recherche – ungeprüft. Bis zu 11 Recherche-Lanes; keine genaue Kostenschätzung verfügbar.").font(.caption)
+                Button("Kandidaten automatisch vertiefen") { Task { await workspace.researchCandidates(ids: [politicalCase.id]) } }
+                    .disabled(workspace.isResearchingCases || workspace.isDiscoveringPromises)
+                if workspace.isResearchingCases { Text(workspace.researchProgress ?? "Recherche läuft …") }
+            } else { Text("Kein automatisches Recherche-Dossier vorhanden.").foregroundStyle(.secondary) }
+            if let error = workspace.researchErrorMessage { Text(error).foregroundStyle(.orange) }
+        }
     }
 
     private var exportSection: some View {
@@ -844,5 +860,102 @@ private extension ScriptStatementKind {
         case .question: return "Frage"
         case .qualification: return "Einschränkung"
         }
+    }
+}
+
+struct ResearchDossierView: View {
+    let dossier: DeepResearchRecordV1
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("KI-Recherche – ungeprüft").font(.headline).foregroundStyle(.orange)
+            Text("Recherchelauf abgeschlossen; Quellen, Kriterien und Evidenz nicht freigegeben.").font(.caption)
+            Text(dossier.discovery.candidate.exactQuote).textSelection(.enabled)
+            Text(dossier.result.originalSourceReview.context)
+            criteriaAndCoverage
+            developments
+            evidenceCards
+            assessments
+            questionsAndSources
+        }
+    }
+    private var criteriaAndCoverage: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Vorgeschlagene Kriterien und Suchabdeckung").font(.headline)
+            ForEach(dossier.result.proposedCriteria, id: \.criterionKey) { criterion in
+                Text(criterion.goal + " · Draft · " + (criterion.isCore ? "Kernkriterium" : "Teilbestandteil"))
+                Text("Frist: " + (criterion.deadline ?? "unbekannt") + " · " + criterion.materialityRule).font(.caption)
+            }
+            ForEach(dossier.result.coverage, id: \.criterionKey) { coverage in
+                Text(coverage.criterionKey + ": SUPPORT \(coverage.supportSearchPerformed ? "ausgeführt" : "fehlend") (\(coverage.supportSourceCount)), CONTRADICTION \(coverage.contradictionSearchPerformed ? "ausgeführt" : "fehlend") (\(coverage.contradictionSourceCount)), CONTEXT \(coverage.contextSearchPerformed ? "ausgeführt" : "fehlend") (\(coverage.contextSourceCount))").font(.caption)
+                Text((coverage.blockedQueries + coverage.failedQueries + coverage.unresolvedQuestions).joined(separator: " · ")).foregroundStyle(.secondary)
+            }
+        }
+    }
+    private var developments: some View {
+        VStack(alignment: .leading) {
+            Text("Spätere Entwicklungen – ungeprüfte Action-Drafts").font(.headline)
+            ForEach(dossier.result.developments, id: \.developmentKey) { development in
+                Text(development.title + " · " + development.proceduralState)
+                Text(development.description + " · Ereignis: " + (development.eventDate ?? "unbekannt")).font(.caption)
+            }
+        }
+    }
+    private var evidenceCards: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Unterstützende Evidenz, Gegenbelege und Kontext – Drafts").font(.headline)
+            ForEach(dossier.result.evidenceProposals, id: \.evidenceKey) { evidence in
+                ResearchEvidenceCard(evidence: evidence, dossier: dossier)
+            }
+        }
+    }
+    private var assessments: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("KI-Bewertungsvorschlag – noch keine freigegebene Bewertung").font(.headline)
+            ForEach(dossier.result.criterionAssessmentDrafts, id: \.criterionKey) { assessment in
+                Text(assessment.criterionKey + ": " + (assessment.suggestedCategory?.rawValue ?? "noRecommendation") + " · " + assessment.confidence.rawValue)
+                Text(assessment.rationale)
+                Text("Pro: " + assessment.supportingEvidenceKeys.joined(separator: ", ") + " · Contra: " + assessment.counterEvidenceKeys.joined(separator: ", ")).font(.caption)
+                Text("KI-behauptete Fakten: " + assessment.facts.joined(separator: " · ")).font(.caption)
+                Text("Interpretationen: " + assessment.interpretations.joined(separator: " · ")).font(.caption)
+                Text((assessment.uncertainties + assessment.notVerifiableReasons.map { $0.rawValue }).joined(separator: " · ")).foregroundStyle(.secondary)
+            }
+            Text("Gesamtvorschlag: " + (dossier.result.overallAssessmentDraft.suggestedCategory?.rawValue ?? "noRecommendation") + " · " + dossier.result.overallAssessmentDraft.confidence.rawValue)
+            Text(dossier.result.overallAssessmentDraft.rationale)
+            Text((dossier.result.overallAssessmentDraft.uncertainties + dossier.result.overallAssessmentDraft.notVerifiableReasons.map { $0.rawValue }).joined(separator: " · ")).foregroundStyle(.secondary)
+        }
+    }
+    private var questionsAndSources: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Ungeklärte Fragen und Quellen").font(.headline)
+            Text((dossier.result.uncertainties + dossier.result.originalSourceReview.uncertainties).joined(separator: " · "))
+            ForEach(Array(dossier.result.issues.enumerated()), id: \.offset) { _, issue in Text(issue.laneID + ": " + issue.message).foregroundStyle(.orange) }
+            ForEach(dossier.result.sources, id: \.claim.sourceKey) { source in
+                if let url = URL(string: source.searchSource.url) {
+                    Link(source.claim.title ?? source.searchSource.title ?? source.searchSource.domain, destination: url)
+                    Text(source.category.rawValue + " · " + source.searchSource.url).font(.caption)
+                }
+            }
+        }
+    }
+}
+private struct ResearchEvidenceCard: View {
+    let evidence: EvidenceProposal
+    let dossier: DeepResearchRecordV1
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(evidence.relationship.rawValue + " · " + evidence.criterionKey + " · " + evidence.directness.rawValue).font(.headline)
+            Text(evidence.rationale)
+            Text("Zeitbezug (" + evidence.temporalRole.rawValue + "): " + (evidence.temporalDate ?? "unbekannt")).font(.caption)
+            ForEach(dossier.result.excerpts.filter { evidence.excerptKeys.contains($0.excerptKey) }, id: \.excerptKey) { excerpt in
+                Text(excerpt.text).textSelection(.enabled)
+                Text(excerpt.locator + " · " + excerpt.context).font(.caption)
+                if let source = dossier.result.sources.first(where: { $0.claim.sourceKey == excerpt.sourceKey }), let url = URL(string: source.searchSource.url) {
+                    Link(source.claim.title ?? source.searchSource.domain, destination: url)
+                    Text(source.searchSource.url).font(.caption)
+                }
+                Text(excerpt.uncertainties.joined(separator: " · ")).foregroundStyle(.secondary)
+            }
+            Text(evidence.uncertainties.joined(separator: " · ")).foregroundStyle(.secondary)
+        }.padding(12).background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
     }
 }

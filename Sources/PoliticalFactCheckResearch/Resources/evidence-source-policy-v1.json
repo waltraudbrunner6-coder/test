@@ -1,0 +1,8 @@
+{"version":"evidence-source-policy-v1","domains":[
+{"host":"parlament.gv.at","category":"parliament"},
+{"host":"ris.bka.gv.at","category":"lawOrRegulation"},
+{"host":"bundeskanzleramt.gv.at","category":"government"},
+{"host":"oesterreich.gv.at","category":"publicAdministration"},
+{"host":"rechnungshof.gv.at","category":"auditInstitution"},
+{"host":"statistik.at","category":"officialStatistics"},
+{"host":"gv.at","category":"otherOfficialPrimary"}]}

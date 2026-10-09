@@ -43,3 +43,8 @@ Alle neuen HTTP-Tests verwenden URLProtocol und synthetische Quellen/Akteure, ke
 Keine Garantie vollständiger Treffer, echter Wortlauttreue oder gleichmäßiger Suchabdeckung. Kein Crawl/Download/HTML-Parsing, keine Netzwerk-Recherche in Persistence oder Core, keine automatisch verifizierten Quellen. Keine Livequalität, Authentizität oder Produktivfreigabe behauptet. Das Metadatenformat ist unabhängig versioniert; künftige Format-/Policyänderungen dürfen gespeicherte Herkunft und Historie nicht umschreiben.
 
 Prüfstand dieses Schritts: **95 neue Tests**, erwartet **558 insgesamt** (463 bestehende unverändert). Neu: 69 Research, 13 Persistence, 13 AppModel. `swift --version`, `swift test` und der native `xcodebuild` enden lokal mit Exit 127 (command not found). Dies ist kein erfolgreicher Testlauf; macOS-CI-Verifikation steht aus.
+
+
+## Phase 5.2: automatische Vertiefung
+
+Phase 5.1 ist extern bestätigt (Run 37902591356, 558 Tests, Apple Swift 6.1.2, nativer arm64-Build). Die bestehende Discovery-Policy und der Discovery-Vertrag bleiben unverändert. CaseResearchProvider ergänzt ORIGINAL und je Kriterium symmetrische SUPPORT/CONTRADICTION/CONTEXT-Lanes sowie einen gesonderten Assessment-DTO. Bulk-Vertiefung speichert ausschließlich ungeprüfte Drafts und DeepResearchRecordV1 atomar. Candidate bleibt candidate; keine echte Evaluation, Verifikation, Beteiligung oder Freigabe. Details: docs/automatic-evidence-research.md.

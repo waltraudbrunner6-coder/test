@@ -38,7 +38,7 @@ struct MainWindowView: View {
                 Button("Automatisch Fälle finden", systemImage: "sparkle.magnifyingglass") {
                     showsResearchInbox = true
                     Task { await workspace.discoverPromises() }
-                }.disabled(workspace.isDiscoveringPromises)
+                }.disabled(workspace.isDiscoveringPromises || workspace.isResearchingCases)
                 Button("Recherche-Inbox", systemImage: "tray") { showsResearchInbox = true }
 
                 Button("Neu laden", systemImage: "arrow.clockwise") { workspace.reload() }
@@ -232,18 +232,30 @@ struct ResearchInboxView: View {
                     .foregroundStyle(.secondary)
                 HStack {
                     Button("Automatisch Fälle finden") { Task { await workspace.discoverPromises() } }
-                        .buttonStyle(.borderedProminent).disabled(workspace.isDiscoveringPromises)
+                        .buttonStyle(.borderedProminent).disabled(workspace.isDiscoveringPromises || workspace.isResearchingCases)
                     if workspace.isDiscoveringPromises {
                         ProgressView().controlSize(.small)
                         Text("Quellengruppen werden recherchiert …")
                         Button("Abbrechen") { workspace.cancelDiscovery() }
                     }
                 }
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("\(workspace.pendingResearchCount) Kandidaten · bis zu 11 Recherche-Lanes pro Kandidat (ORIGINAL, 3 × SUPPORT/CONTRADICTION/CONTEXT, ASSESSMENT)").font(.caption)
+                    Button("Alle Kandidaten automatisch vertiefen") { Task { await workspace.researchCandidates() } }
+                        .disabled(workspace.isResearchingCases || workspace.isDiscoveringPromises || workspace.pendingResearchCount == 0)
+                    if workspace.isResearchingCases {
+                        ProgressView()
+                        Text(workspace.researchProgress ?? "Recherche läuft …")
+                        Button("Vertiefung abbrechen") { workspace.cancelCaseResearch() }
+                    }
+                    if let message = workspace.researchMessage { Text(message) }
+                    if let error = workspace.researchErrorMessage { Text(error).foregroundStyle(.orange).textSelection(.enabled) }
+                }
                 if let message = workspace.discoveryMessage { Text(message).textSelection(.enabled) }
                 if let error = workspace.discoveryErrorMessage { Text(error).foregroundStyle(.orange).textSelection(.enabled) }
                 if workspace.researchInbox.isEmpty { Text("Noch keine ungeprüften Recherchekandidaten. Auch null Funde sind ein gültiges Rechercheergebnis.").foregroundStyle(.secondary) }
                 ForEach(workspace.researchInbox) { item in
-                    ResearchCandidateCard(item: item, open: { openCase(item.id) }, discard: { workspace.discardDiscoveryCandidate(id: item.id) })
+                    ResearchCandidateCard(item: item, researched: workspace.researchDossiers[item.id] != nil, open: { openCase(item.id) }, discard: { workspace.discardDiscoveryCandidate(id: item.id) })
                 }
             }.padding(24).frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -252,11 +264,12 @@ struct ResearchInboxView: View {
 
 private struct ResearchCandidateCard: View {
     let item: ResearchInboxItem
+    let researched: Bool
     let open: () -> Void
     let discard: () -> Void
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Ungeprüfter KI-Recherchekandidat").font(.caption).foregroundStyle(.orange)
+            Text(researched ? "Bereits vertieft recherchiert · KI-Recherche – ungeprüft" : "Ungeprüfter KI-Recherchekandidat").font(.caption).foregroundStyle(.orange)
             Text(item.candidate.title).font(.headline)
             Text(item.candidate.exactQuote).textSelection(.enabled)
             Text("Sprecher: " + (item.candidate.speakerName ?? "unbekannt") + " · Partei: " + (item.candidate.partyName ?? "unbekannt"))

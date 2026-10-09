@@ -2,3 +2,8 @@ import PoliticalFactCheckResearch
 
 // Presentation values keep the native app dependent on its existing AppModel product.
 public typealias ResearchInboxItem = PoliticalFactCheckResearch.ResearchInboxItem
+
+public typealias DeepResearchRecordV1 = PoliticalFactCheckResearch.DeepResearchRecordV1
+public typealias EvidenceProposal = PoliticalFactCheckResearch.EvidenceProposal
+public typealias ProposedCriterionAssessment = PoliticalFactCheckResearch.ProposedCriterionAssessment
+public typealias ProposedCaseAssessment = PoliticalFactCheckResearch.ProposedCaseAssessment

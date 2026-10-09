@@ -29,6 +29,13 @@ public final class CaseWorkspaceModel: ObservableObject {
     @Published public private(set) var discoveryMessage: String?
     @Published public private(set) var discoveryErrorMessage: String?
     private var discoveryTask: Task<PromiseDiscoveryResult, Error>?
+    @Published public private(set) var researchDossiers: [EntityID<PoliticalFactCheckCore.Case>: DeepResearchRecordV1] = [:]
+    @Published public private(set) var isResearchingCases = false
+    @Published public private(set) var researchProgress: String?
+    @Published public private(set) var researchMessage: String?
+    @Published public private(set) var researchErrorMessage: String?
+    private var caseResearchTask: Task<CaseResearchResult, Error>?
+    public var pendingResearchCount: Int { researchInbox.filter { researchDossiers[$0.id] == nil }.count }
 
     private static let reviewerNameKey = "politicalFactCheck.reviewerName"
     private static let reviewerIDKey = "politicalFactCheck.reviewerID"
@@ -76,6 +83,7 @@ public final class CaseWorkspaceModel: ObservableObject {
             errorMessage = nil
             loadSelectedCase()
             reloadResearchInbox()
+            reloadResearchDossiers()
         } catch { present(error) }
     }
 
@@ -89,7 +97,7 @@ public final class CaseWorkspaceModel: ObservableObject {
 
     public func discoverPromises(provider: any PromiseDiscoveryProvider = OpenAIPromiseDiscoveryProvider(),
                                  policy: SourcePolicy? = nil, currentDate: Date = Date()) async {
-        guard !isDiscoveringPromises else { return }
+        guard !isDiscoveringPromises && !isResearchingCases else { return }
         guard let store else { discoveryErrorMessage = "Lokaler Store ist nicht verfügbar."; return }
         isDiscoveringPromises = true; discoveryErrorMessage = nil; discoveryMessage = nil
         defer { isDiscoveringPromises = false; discoveryTask = nil }
@@ -139,6 +147,54 @@ public final class CaseWorkspaceModel: ObservableObject {
             try store.deleteDraftCase(id: id)
             reload()
         } catch { present(error) }
+    }
+
+    public func reloadResearchDossiers() {
+        guard let store else { return }
+        do {
+            var dossiers: [EntityID<PoliticalFactCheckCore.Case>: DeepResearchRecordV1] = [:]
+            for root in cases { if let dossier = try store.researchDossier(caseID: root.id) { dossiers[root.id] = dossier } }
+            researchDossiers = dossiers
+        } catch { researchErrorMessage = (error as? CaseResearchError)?.displayMessage ?? "Recherche-Dossier konnte nicht geladen werden." }
+    }
+    public func cancelCaseResearch() { caseResearchTask?.cancel() }
+    public func researchCandidates(ids: [EntityID<PoliticalFactCheckCore.Case>]? = nil,
+                                   provider: any CaseResearchProvider = OpenAICaseResearchProvider(),
+                                   policy: EvidenceSourcePolicy? = nil, currentDate: Date = Date()) async {
+        guard !isResearchingCases && !isDiscoveringPromises else { return }
+        guard let store else { researchErrorMessage = "Lokaler Store ist nicht verfügbar."; return }
+        isResearchingCases = true; researchMessage = nil; researchErrorMessage = nil
+        defer { isResearchingCases = false; caseResearchTask = nil; researchProgress = nil }
+        do {
+            let policy = try policy ?? EvidenceSourcePolicy.version1(); try policy.validate()
+            let candidates = ids ?? researchInbox.map { $0.id }
+            var saved = 0; var skipped = 0; var failures: [String] = []
+            for (index, id) in candidates.enumerated() {
+                try Task.checkCancellation()
+                do {
+                    if try store.researchDossier(caseID: id) != nil { skipped += 1; continue }
+                    let base = try store.caseResearchRequest(caseID: id, policy: policy, currentDate: currentDate)
+                    let label = "Kandidat \(index + 1) von \(candidates.count)"
+                    researchProgress = label + " · ORIGINAL"
+                    let request = CaseResearchRequest(caseID: base.caseID, promiseRevisionID: base.promiseRevisionID, discovery: base.discovery,
+                        policy: base.policy, currentDate: base.currentDate, maxCriteria: base.maxCriteria, searchBudget: base.searchBudget,
+                        maxResultsPerLane: base.maxResultsPerLane, onProgress: { [weak self] intent, criterion in
+                            await MainActor.run { self?.researchProgress = label + " · " + intent.rawValue.uppercased() + (criterion.map { " · " + $0 } ?? "") }
+                        }, startedAt: base.startedAt)
+                    let task = Task { try await provider.researchCase(request: request) }; caseResearchTask = task
+                    let result = try await withTaskCancellationHandler(operation: { try await task.value }, onCancel: { task.cancel() })
+                    try Task.checkCancellation(); guard !task.isCancelled else { throw CancellationError() }
+                    try store.saveCaseResearch(DeepResearchRecordV1(request: request, provider: provider.identifier.value, result: result))
+                    saved += 1; reload()
+                } catch is CancellationError { throw CancellationError() }
+                catch { failures.append((error as? CaseResearchError)?.displayMessage ?? (error as? DiscoveryError)?.displayMessage ?? "Kandidat konnte nicht atomar recherchiert werden.") }
+            }
+            researchMessage = "Vertiefung abgeschlossen: \(saved) Dossiers, \(skipped) bereits vertieft recherchiert, \(failures.count) Fehler."
+            if !failures.isEmpty { researchErrorMessage = failures.joined(separator: "\n") }
+            reload()
+        } catch is CancellationError {
+            researchMessage = "Vertiefung abgebrochen. Gespeicherte Dossiers bleiben erhalten; laufender Kandidat verworfen."; reload()
+        } catch { researchErrorMessage = (error as? CaseResearchError)?.displayMessage ?? "Vertiefung konnte nicht gestartet werden." }
     }
 
     public func selectCase(_ id: EntityID<PoliticalFactCheckCore.Case>?) {

@@ -1,6 +1,6 @@
 # Produktspezifikation: Politische Faktencheck-Videos für macOS
 
-Status: Phase 5.1 · automatische Versprechenssuche · Stand: 9. Oktober 2026
+Status: Phase 5.2 · automatische Evidenzrecherche · Stand: 9. Oktober 2026
 
 ## 1. Ziel und Leitprinzipien
 
@@ -8,7 +8,7 @@ Eine macOS-Anwendung unterstützt die nachvollziehbare Prüfung öffentlich doku
 
 **Alle Parteien werden nach derselben Methodik geprüft.** Parteiidentität, Popularität oder eine angenommene Absicht sind keine Bewertungskriterien. Eine Abweichung belegt für sich weder Täuschung noch Unehrlichkeit. Große, gut belegte Diskrepanzen dürfen die spätere redaktionelle Fallauswahl beeinflussen; sie verändern keine Bewertungsmaßstäbe.
 
-Die bisherige technische MVP-Basis ist extern bestätigt: Commit d0f2460e33f5360c718df7e29b254220431819c8, 463 erfolgreiche Tests und nativer arm64-Build. Die Produktstrategie wird erweitert: automatische Fallfindung → Primärquellen → später automatisierte Beleg-/Gegenbelegsuche → Bewertungsentwurf → Skript/Storyboard/Video → menschliche Endprüfung und Freigabe. Phase 5.1 implementiert ausschließlich automatische Versprechenssuche und ungeprüfte candidate-Cases in einer Recherche-Inbox. Alle späteren Automationsschritte sind Ausbauziele; manuelle Bearbeitung bleibt verfügbar. Methodik und menschliche Endfreigabe bleiben verbindlich. Siehe `docs/automatic-research.md` und `docs/research-source-policy-v1.md`.
+Die bisherige technische MVP-Basis ist extern bestätigt: Commit d0f2460e33f5360c718df7e29b254220431819c8, 463 erfolgreiche Tests und nativer arm64-Build. Die Produktstrategie wird erweitert: automatische Fallfindung → Primärquellen → später automatisierte Beleg-/Gegenbelegsuche → Bewertungsentwurf → Skript/Storyboard/Video → menschliche Endprüfung und Freigabe. Phase 5.1 implementiert automatische Versprechenssuche und ungeprüfte candidate-Cases in einer Recherche-Inbox. Phase 5.2 ergänzt eigenständige Original-/Support-/Contra-/Kontext-Recherche, ungeprüfte Kriterien-/Source-/Action-/Evidence-Drafts und einen ausdrücklich separaten AI-Bewertungsvorschlag im Dossier. Diese Vorschläge sind keine echte CaseEvaluation und erzeugen keine menschliche Verifikation oder Freigabe. Alle späteren Automationsschritte sind Ausbauziele; manuelle Bearbeitung bleibt verfügbar. Methodik und menschliche Endfreigabe bleiben verbindlich. Siehe `docs/automatic-evidence-research.md`, `docs/automatic-research.md` und `docs/research-source-policy-v1.md`.
 
 ## 2. Komponenten und Ablauf
 
@@ -17,6 +17,7 @@ Die bisherige technische MVP-Basis ist extern bestätigt: Commit d0f2460e33f5360
 | Automatische Fallfindung | Gleiche versionierte Primärquellenpolitik für alle Parteigruppen; ungeprüfte Kandidaten ohne Nutzerquery, keine Bewertung. |
 | Fallverwaltung | Ein Versprechen mit Akteur, Kontext, Prüfzeitraum und Kriterien anlegen. |
 | Quellenablage | Dokumente, URLs, Auszüge und genaue Fundstellen manuell aufnehmen. |
+| Automatische Vertiefung | Gleich budgetierte Recherche-Lanes und ungeprüfte Drafts; Kriterien vor Outcome-Recherche festhalten; keine automatische Reviewfreigabe. |
 | Belegprüfung | Originalität, Kontext, Datum und Aussagekraft prüfen; Gegenbelege und offene Fragen dokumentieren. |
 | Vergleichsansicht | Originalversprechen, Kriterien, spätere Handlungen und Evidenz nebeneinander anzeigen. |
 | Bewertung | Regelgestützten Vorschlag erklären; abschließende Einstufung durch einen Menschen. |
@@ -142,8 +143,8 @@ Die Cloud-Umgebung kann Dokumentation und plattformunabhängige Arbeit unterstü
 
 | Stufe | Umfang |
 | --- | --- |
-| **MVP — umgesetzt / Phase 5.1** | Ein vollständiger Fall bis zum geprüften Skript- und Quellenexport; lokale Speicherung und Wiederherstellung; zusätzlich automatische Versprechenssuche mit ungeprüfter Inbox. |
-| **Nächste Phasen — geplant** | Automatische Beleg-/Gegenbelegrecherche, Validierungs- und Bewertungsentwürfe mit menschlicher Freigabe; anschließend Skript, Storyboard, TTS, Untertitel und Video. |
+| **MVP — umgesetzt / Phase 5.1** | Ein vollständiger Fall bis zum geprüften Skript- und Quellenexport; lokale Speicherung und Wiederherstellung; zusätzlich automatische Versprechenssuche, ungeprüfte Inbox und Deep-Research-Dossiers mit Drafts. |
+| **Nächste Phasen — geplant** | Kompakte Review-Queue für vorhandene Research-Drafts und Übernahme in echte menschlich freigegebene Bewertung; anschließend Skript, Storyboard, TTS, Untertitel und Video. |
 | **Später — möglich** | Erweiterte Quellenabdeckung und überwachte Aktualisierung von Fällen, weitere KI-Anbieter, aufwendigere Visuals, Teamfunktionen und optionale Synchronisierung. |
 
 Automatische Veröffentlichungen und pauschale Ehrlichkeits-Rankings sind kein vorgesehenes Produktziel. Videoerzeugung beginnt erst, wenn der einzelne Faktencheck nachvollziehbar und reproduzierbar funktioniert.
