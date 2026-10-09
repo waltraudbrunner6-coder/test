@@ -139,7 +139,11 @@ public struct ResearchReviewPlan {
         if record.result.overallAssessmentDraft.suggestedCategory == nil { blockers.append(ResearchReviewError.noRecommendation.displayMessage) }
         for assessment in record.result.criterionAssessmentDrafts where criterionMap[assessment.criterionKey] != nil {
             if assessment.suggestedCategory == nil { blockers.append("KI gibt für \(assessment.criterionKey) keine belastbare Empfehlung.") }
-            if (assessment.supportingEvidenceKeys + assessment.counterEvidenceKeys).contains(where: { evidenceMap[$0] == nil }) { blockers.append("Für \(assessment.criterionKey) fehlt noch mindestens eine geprüfte Evidenzzuordnung.") }
+            if assessment.suggestedCategory == .notVerifiable {
+                if assessment.notVerifiableReasons.isEmpty { blockers.append("Nicht überprüfbar benötigt einen strukturierten Grund.") }
+            } else if (assessment.supportingEvidenceKeys + assessment.counterEvidenceKeys).contains(where: { evidenceMap[$0] == nil }) {
+                blockers.append("Für \(assessment.criterionKey) fehlt noch mindestens eine geprüfte Evidenzzuordnung.")
+            }
         }
         if root.workflowState != .readyForEvaluation && root.workflowState != .evaluated && root.workflowState != .approved { blockers.append("Der Fall hat die Bewertungsreife noch nicht erreicht.") }
         warnings = record.result.evidenceProposals.filter { $0.relationship == .contradicts && evidenceMap[$0.evidenceKey] == nil }.map { "Ein recherchierter Gegenbeleg wurde nicht übernommen: " + $0.evidenceKey }

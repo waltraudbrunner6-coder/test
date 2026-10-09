@@ -89,6 +89,9 @@ final class ResearchReviewTests: XCTestCase {
         let raw = try XCTUnwrap(plan.record.bindings?.excerpts["e1"])
         XCTAssertEqual(graph.find(EntityID<SourceExcerpt>(raw))?.state, .unverified)
         XCTAssertEqual(graph.caseEvaluations[0].category, .notVerifiable)
+        XCTAssertTrue(graph.criterionEvaluations[0].evidenceLinkIDs.isEmpty)
+        XCTAssertTrue(graph.criterionEvaluations[0].counterEvidenceLinkIDs.isEmpty)
+        XCTAssertEqual(graph.criterionEvaluations[0].notVerifiableReasons, [.missingEvidence])
     }
     @MainActor func testUnverifiedExcerptPreventsEvidenceAdoptionAndRollsBack() throws {
         let (f, store) = try setup(); try frame(f, store)
@@ -170,7 +173,10 @@ final class ResearchReviewTests: XCTestCase {
             var criteria = object["proposedCriteria"] as! [[String: Any]], second = criteria[0]
             second["criterionKey"] = "criterion-2"; second["goal"] = "Synthetischer zweiter Zielzustand"; criteria.append(second); object["proposedCriteria"] = criteria
             var coverage = object["coverage"] as! [[String: Any]], c = coverage[0]; c["criterionKey"] = "criterion-2"; coverage.append(c); object["coverage"] = coverage
-            var assessments = object["criterionAssessmentDrafts"] as! [[String: Any]], a = assessments[0]; a["criterionKey"] = "criterion-2"; assessments.append(a); object["criterionAssessmentDrafts"] = assessments
+            var assessments = object["criterionAssessmentDrafts"] as! [[String: Any]], a = assessments[0]
+            a["criterionKey"] = "criterion-2"; a["suggestedCategory"] = "notVerifiable"; a["confidence"] = "low"
+            a["supportingEvidenceKeys"] = []; a["counterEvidenceKeys"] = []; a["notVerifiableReasons"] = ["missingEvidence"]; a["decisiveUncertainty"] = true
+            assessments.append(a); object["criterionAssessmentDrafts"] = assessments
             var overall = object["overallAssessmentDraft"] as! [String: Any]; overall["criterionAssessmentKeys"] = ["criterion-1","criterion-2"]; object["overallAssessmentDraft"] = overall
         }
         try store.saveCase(f.graph); try store.saveCaseResearch(f.record(result)); try original(f, store)
@@ -203,8 +209,8 @@ final class ResearchReviewTests: XCTestCase {
         let result = try f.result { object in
             var link = (object["evidenceProposals"] as! [[String: Any]])[0]; link["relationship"] = "contradicts"; object["evidenceProposals"] = [link]
             var row = (object["criterionAssessmentDrafts"] as! [[String: Any]])[0]; row["suggestedCategory"] = "contraryAction"; row["confidence"] = "high"
-            row["supportingEvidenceKeys"] = []; row["counterEvidenceKeys"] = ["ev1"]; object["criterionAssessmentDrafts"] = [row]
-            var overall = object["overallAssessmentDraft"] as! [String: Any]; overall["suggestedCategory"] = "contraryAction"; overall["confidence"] = "high"; object["overallAssessmentDraft"] = overall
+            row["supportingEvidenceKeys"] = []; row["counterEvidenceKeys"] = ["ev1"]; row["decisiveUncertainty"] = false; object["criterionAssessmentDrafts"] = [row]
+            var overall = object["overallAssessmentDraft"] as! [String: Any]; overall["suggestedCategory"] = "contraryAction"; overall["confidence"] = "high"; overall["decisiveUncertainty"] = false; object["overallAssessmentDraft"] = overall
         }
         try store.saveCase(f.graph); try store.saveCaseResearch(f.record(result)); try evidence(f, store)
         try store.materializeResearchAssessment(caseID: f.request.caseID, acknowledgeOmittedCounterEvidence: false, reviewer: reviewer, at: date)
@@ -215,6 +221,53 @@ final class ResearchReviewTests: XCTestCase {
         let ids = graph.criterionEvaluations[0].counterEvidenceLinkIDs
         XCTAssertEqual(ids.count, 1); XCTAssertTrue(ids.allSatisfy { graph.find($0)?.status == .verified && graph.find($0)?.review?.reviewerID == reviewer.id })
         XCTAssertEqual(graph.evidenceLinks[0].status, .draft)
+    }
+
+    @MainActor func categorySetup(_ category: String, negative: Bool) throws -> (DeepResearchFixture, LocalCaseStore) {
+        let f = try DeepResearchFixture(), store = try LocalCaseStore.inMemory()
+        let result = try f.result { object in
+            if negative {
+                var link = (object["evidenceProposals"] as! [[String: Any]])[0]
+                link["relationship"] = "contradicts"; object["evidenceProposals"] = [link]
+            }
+            changeAssessment(&object, category: category, supporting: negative ? [] : ["ev1"], counter: negative ? ["ev1"] : [])
+        }
+        try CaseResearchValidation.validate(result, request: f.request)
+        try store.saveCase(f.graph); try store.saveCaseResearch(f.record(result)); try frame(f, store)
+        return (f, store)
+    }
+    @MainActor func testFulfilledWithoutHumanAdoptedEvidenceRemainsBlocked() throws {
+        let (f, store) = try categorySetup("fulfilled", negative: false)
+        let plan = try store.researchReviewPlan(caseID: f.request.caseID)
+        XCTAssertEqual(plan.assessment, .blocked); XCTAssertFalse(plan.blockingIssues.isEmpty)
+        XCTAssertTrue(plan.evidenceIDs.isEmpty)
+        let before = CaseGraphDTO(try XCTUnwrap(store.loadCase(id: f.request.caseID)))
+        XCTAssertThrowsError(try ResearchAssessmentMapping.materialize(plan: plan, graph: XCTUnwrap(store.loadCase(id: f.request.caseID))))
+        XCTAssertThrowsError(try store.materializeResearchAssessment(caseID: f.request.caseID, acknowledgeOmittedCounterEvidence: false, reviewer: reviewer, at: date))
+        XCTAssertEqual(before, CaseGraphDTO(try XCTUnwrap(store.loadCase(id: f.request.caseID))))
+    }
+    @MainActor func testNegativeCategoriesWithoutHumanAdoptedCounterEvidenceRemainBlocked() throws {
+        for category in ["notFulfilled", "contraryAction"] {
+            let (f, store) = try categorySetup(category, negative: true)
+            let plan = try store.researchReviewPlan(caseID: f.request.caseID)
+            XCTAssertEqual(plan.assessment, .blocked); XCTAssertFalse(plan.blockingIssues.isEmpty)
+            XCTAssertTrue(plan.evidenceIDs.isEmpty); XCTAssertFalse(plan.warnings.isEmpty)
+            let before = CaseGraphDTO(try XCTUnwrap(store.loadCase(id: f.request.caseID)))
+            XCTAssertThrowsError(try store.materializeResearchAssessment(caseID: f.request.caseID, acknowledgeOmittedCounterEvidence: true, reviewer: reviewer, at: date))
+            XCTAssertEqual(before, CaseGraphDTO(try XCTUnwrap(store.loadCase(id: f.request.caseID))))
+        }
+    }
+    @MainActor func testNotVerifiableRetainsHumanAdoptedEvidenceWithoutAIIDs() throws {
+        let (f, store) = try setup(); try evidence(f, store)
+        let plan = try store.researchReviewPlan(caseID: f.request.caseID), humanID = try XCTUnwrap(plan.evidenceIDs["ev1"])
+        XCTAssertEqual(plan.assessment, .ready)
+        try store.materializeResearchAssessment(caseID: f.request.caseID, acknowledgeOmittedCounterEvidence: false, reviewer: reviewer, at: date)
+        let graph = try XCTUnwrap(store.loadCase(id: f.request.caseID)), child = try XCTUnwrap(graph.criterionEvaluations.first)
+        XCTAssertEqual(child.category, .notVerifiable); XCTAssertEqual(child.notVerifiableReasons, [.missingEvidence])
+        XCTAssertEqual(child.evidenceLinkIDs, [humanID]); XCTAssertTrue(child.counterEvidenceLinkIDs.isEmpty)
+        XCTAssertEqual(graph.find(humanID)?.status, .verified); XCTAssertEqual(graph.find(humanID)?.review?.reviewerID, reviewer.id)
+        XCTAssertNotEqual(humanID.rawValue, plan.record.bindings?.evidenceLinks["ev1"])
+        XCTAssertEqual(try CaseResearchDraftMapper.dossier(in: graph), plan.record)
     }
 
     func testAllCategoriesMapExplicitlyWithoutDefaults() throws {

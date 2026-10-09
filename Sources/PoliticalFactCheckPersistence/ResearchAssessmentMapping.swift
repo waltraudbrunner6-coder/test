@@ -45,11 +45,17 @@ public enum ResearchAssessmentMapping {
         try CaseResearchValidation.validate(plan.record.result, request: plan.record.request)
         let rows = try plan.record.result.criterionAssessmentDrafts.compactMap { row -> ManualCriterionAssessment? in
             guard let id = plan.criterionIDs[row.criterionKey] else { return nil }
-            guard graph.find(id)?.state == .confirmed else { throw ResearchReviewError.unconfirmedCriteria }
+            guard let criterion = graph.find(id), criterion.state == .confirmed,
+                  graph.find(criterion.criterionID)?.currentRevisionID == id else { throw ResearchReviewError.unconfirmedCriteria }
             func links(_ keys: [String]) throws -> [EntityID<EvidenceLink>] {
-                try keys.map { key in
-                    guard let id = plan.evidenceIDs[key], let link = graph.find(id), link.status == .verified,
-                          link.criterionRevisionID == plan.criterionIDs[row.criterionKey] else { throw ResearchReviewError.incompleteSources }
+                try keys.compactMap { key -> EntityID<EvidenceLink>? in
+                    guard let id = plan.evidenceIDs[key] else {
+                        if row.suggestedCategory == .notVerifiable { return nil }
+                        throw ResearchReviewError.incompleteSources
+                    }
+                    guard let link = graph.find(id), link.status == .verified, link.review != nil,
+                          link.criterionRevisionID == criterion.id,
+                          DomainValidator.validate(link, in: graph).isValid else { throw ResearchReviewError.incompleteSources }
                     return id
                 }
             }
