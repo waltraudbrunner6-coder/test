@@ -16,14 +16,17 @@ var targets: [Target] = [
     .testTarget(name: "PoliticalFactCheckCoreTests", dependencies: ["PoliticalFactCheckCore"])
 ]
 #if os(macOS)
+products.append(.library(name: "PoliticalFactCheckAudio", targets: ["PoliticalFactCheckAudio"]))
+targets.append(.target(name: "PoliticalFactCheckAudio", dependencies: ["PoliticalFactCheckCore", "PoliticalFactCheckVideoPlanning"], resources: [.process("Resources")]))
+targets.append(.testTarget(name: "PoliticalFactCheckAudioTests", dependencies: ["PoliticalFactCheckCore", "PoliticalFactCheckVideoPlanning", "PoliticalFactCheckAudio"]))
 products.append(.library(name: "PoliticalFactCheckExport", targets: ["PoliticalFactCheckExport"]))
 targets.append(.target(name: "PoliticalFactCheckExport", dependencies: ["PoliticalFactCheckCore", "PoliticalFactCheckScripting"], resources: [.process("Resources")]))
 targets.append(.testTarget(name: "PoliticalFactCheckExportTests", dependencies: ["PoliticalFactCheckCore", "PoliticalFactCheckScripting", "PoliticalFactCheckExport"]))
 products.append(.library(name: "PoliticalFactCheckPersistence", targets: ["PoliticalFactCheckPersistence"]))
 products.append(.library(name: "PoliticalFactCheckAppModel", targets: ["PoliticalFactCheckAppModel"]))
 targets.append(.target(name: "PoliticalFactCheckPersistence", dependencies: ["PoliticalFactCheckCore", "PoliticalFactCheckScripting", "PoliticalFactCheckExport", "PoliticalFactCheckResearch"]))
-targets.append(.target(name: "PoliticalFactCheckAppModel", dependencies: ["PoliticalFactCheckVideoPlanning", "PoliticalFactCheckCore", "PoliticalFactCheckPersistence", "PoliticalFactCheckScripting", "PoliticalFactCheckExport", "PoliticalFactCheckResearch"]))
-targets.append(.testTarget(name: "PoliticalFactCheckAppModelTests", dependencies: ["PoliticalFactCheckVideoPlanning", "PoliticalFactCheckCore", "PoliticalFactCheckPersistence", "PoliticalFactCheckAppModel", "PoliticalFactCheckScripting", "PoliticalFactCheckExport", "PoliticalFactCheckResearch"]))
+targets.append(.target(name: "PoliticalFactCheckAppModel", dependencies: ["PoliticalFactCheckAudio", "PoliticalFactCheckVideoPlanning", "PoliticalFactCheckCore", "PoliticalFactCheckPersistence", "PoliticalFactCheckScripting", "PoliticalFactCheckExport", "PoliticalFactCheckResearch"]))
+targets.append(.testTarget(name: "PoliticalFactCheckAppModelTests", dependencies: ["PoliticalFactCheckAudio", "PoliticalFactCheckVideoPlanning", "PoliticalFactCheckCore", "PoliticalFactCheckPersistence", "PoliticalFactCheckAppModel", "PoliticalFactCheckScripting", "PoliticalFactCheckExport", "PoliticalFactCheckResearch"]))
 targets.append(.testTarget(name: "PoliticalFactCheckPersistenceTests",
     dependencies: ["PoliticalFactCheckCore", "PoliticalFactCheckPersistence", "PoliticalFactCheckScripting", "PoliticalFactCheckExport", "PoliticalFactCheckResearch"]))
 #endif

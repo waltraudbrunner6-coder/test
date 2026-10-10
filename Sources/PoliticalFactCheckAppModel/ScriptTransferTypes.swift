@@ -16,3 +16,7 @@ public typealias VideoSceneV1 = PoliticalFactCheckVideoPlanning.VideoSceneV1
 
 import PoliticalFactCheckExport
 public typealias EditorialPackageSummary = PoliticalFactCheckExport.EditorialPackageSummary
+
+import PoliticalFactCheckAudio
+public typealias NarrationPackageV1 = PoliticalFactCheckAudio.NarrationPackageV1
+public typealias NarrationSettings = PoliticalFactCheckAudio.NarrationSettings

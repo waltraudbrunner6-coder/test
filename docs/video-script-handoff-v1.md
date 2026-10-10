@@ -38,4 +38,8 @@ Interpretation, Frage und Einschränkung benötigen keine Overlays; vorhandene g
 
 ## Nicht enthalten
 
-TTS, Untertitel, Bildmotive, Visualsuche, Personenbilder, B-Roll, Kameraführung, Animation, Musik, Rendering, Cloud, Upload und Publishing sind nicht implementiert. Der Vertrag ist noch kein externer Dateiformat-/Codable-Vertrag. Journalistische Wahrheit und semantische Quellenabdeckung bleiben menschliche Verantwortung. Reale Swift-/macOS-Verifikation des neuen Targets steht aus; Offline-Tests und unveränderte CI prüfen es nach Push.
+Das VideoPlanning-Target enthält keine TTS-, Untertitel-, Bild-, Musik-, Render-, Cloud- oder Publishinglogik. Der Vertrag ist kein externer Dateiformat-/Codable-Vertrag. Journalistische Wahrheit und semantische Quellenabdeckung bleiben menschliche Verantwortung. Der Stand einschließlich VideoPlanning wurde für fc2233a03bbe47916fed54798f18c2514804f8cd extern mit 698 Tests und nativem arm64-Build bestätigt.
+
+## Phase 6.1 – Audio als separater Verbraucher
+
+PoliticalFactCheckAudio verarbeitet den unveränderten Handoff zu lokalen WAVs und Untertiteln. Der Handoff wird vor Beginn und vor Veröffentlichung aus einem frisch geladenen DomainContext erneut validiert, ergänzt durch den vorhandenen vollständigen Case-Change-Token. Seine Planzeiten werden nicht überschrieben; tatsächliche Dauern stehen separat im NarrationPackageManifestV1. Neue aktuelle Skriptversion oder Evaluation.reviewRequired blockieren neue Audioverwendung; historische Audiofiles bleiben erhalten. Details: [narration-pipeline-v1.md](narration-pipeline-v1.md). Das Editorial Package Format 1 bleibt unverändert; Phase 6.2 Rendering ist weiterhin nicht implementiert.

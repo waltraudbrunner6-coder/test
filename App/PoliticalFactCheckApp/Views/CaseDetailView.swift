@@ -114,7 +114,12 @@ struct CaseDetailView: View {
             } else if let blocker = workspace.scriptReviewBlocker {
                 Text(blocker).foregroundStyle(.orange)
             }
-            if let handoff = workspace.videoScriptHandoff { VideoHandoffPreview(handoff: handoff) }
+            if let handoff = workspace.videoScriptHandoff {
+                VideoHandoffPreview(handoff: handoff)
+                NarrationControlsView(workspace: workspace, handoff: handoff)
+            } else if workspace.isGeneratingNarration {
+                NarrationProgressView(workspace: workspace)
+            } else if let error = workspace.narrationErrorMessage { Text(error).foregroundStyle(.orange) }
             if graph.scripts.isEmpty { Text("Noch kein Skriptentwurf.").foregroundStyle(.secondary) }
             DisclosureGroup("Skriptfassungen und bestehende Einzelaktionen") {
                 ForEach(graph.scripts.sorted { $0.createdAt < $1.createdAt }, id: \.id) { script in
@@ -1310,7 +1315,7 @@ private struct VideoHandoffPreview: View {
         VStack(alignment: .leading, spacing: 8) {
             Label("Bereit für Video", systemImage: "checkmark.circle").font(.headline)
             Text("\(handoff.scenes.count) Szenen · geplante Länge: \(Int(handoff.targetDurationSeconds)) s · \(factCount) Fakten-Szenen mit Quellenhinweis")
-            Text("Video-Pipeline folgt in Phase 6. Dauern sind Planwerte, keine gemessene Sprechdauer.").font(.caption)
+            Text("Video-Rendering folgt in Phase 6.2. Diese Szenendauern sind Planwerte, keine gemessene Sprechdauer.").font(.caption)
             DisclosureGroup("Video-Vorschau") {
                 ForEach(handoff.scenes, id: \.statementID) { scene in
                     VStack(alignment: .leading, spacing: 4) {
@@ -1322,6 +1327,70 @@ private struct VideoHandoffPreview: View {
                         }
                     }.padding(.vertical, 6)
                 }
+            }
+        }
+    }
+}
+
+@MainActor private struct NarrationControlsView: View {
+    @ObservedObject var workspace: CaseWorkspaceModel
+    let handoff: VideoScriptHandoffV1
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Sprachspur").font(.headline)
+            Text("Stimme: Marin · Modell: \(workspace.narrationModel) · Format: WAV")
+            Text("\(handoff.scenes.count) Szenen · Zielzeit: \(handoff.targetDurationSeconds, specifier: "%.1f") s")
+            Text("Die Stimme ist KI-generiert. Nur die freigegebenen Narrationtexte und technische Stimmparameter werden an OpenAI gesendet.").font(.caption)
+            if workspace.isGeneratingNarration {
+                NarrationProgressView(workspace: workspace)
+            } else if let package = workspace.narrationPackage {
+                NarrationPackageSummaryView(workspace: workspace, package: package)
+                Button("Neu erzeugen") { Task { await workspace.generateNarration(regenerate: true) } }
+                    .disabled(!workspace.canGenerateNarration)
+            } else {
+                Button("Sprachspur erzeugen") { Task { await workspace.generateNarration() } }
+                    .buttonStyle(.borderedProminent).disabled(!workspace.canGenerateNarration)
+                if workspace.narrationErrorMessage != nil {
+                    Button("Neu erzeugen – vorhandenes Paket ersetzen") { Task { await workspace.generateNarration(regenerate: true) } }
+                        .disabled(!workspace.canGenerateNarration)
+                }
+            }
+            if let error = workspace.narrationErrorMessage { Text(error).foregroundStyle(.orange) }
+        }
+    }
+}
+
+@MainActor private struct NarrationProgressView: View {
+    @ObservedObject var workspace: CaseWorkspaceModel
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ProgressView("Sprachspur wird erzeugt · \(workspace.narrationProgress ?? "Start …")")
+            Button("Abbrechen") { workspace.cancelNarration() }
+        }
+    }
+}
+
+@MainActor private struct NarrationPackageSummaryView: View {
+    @ObservedObject var workspace: CaseWorkspaceModel
+    let package: NarrationPackageV1
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Sprachspur fertig · Sprachspur vorhanden").font(.headline)
+            Text("\(package.manifest.scenes.count) Szenen · Untertitel: \(package.manifest.captionCues.count) Cues")
+            Text("Ziel: \(package.manifest.targetDurationSeconds, specifier: "%.1f") s · Gemessen: \(package.manifest.actualDurationSeconds, specifier: "%.1f") s")
+            Text(package.manifest.disclosureText).font(.caption)
+            if !package.durationWithinPublicationRange {
+                Text("Sprachspur liegt außerhalb der vorgesehenen Kurzvideolänge.").foregroundStyle(.orange)
+            }
+            if workspace.narrationReadyForRendering { Text("Audio-Handoff für Phase 6.2 bereit").foregroundStyle(.green) }
+            DisclosureGroup("Szenen anhören") {
+                ForEach(package.manifest.scenes, id: \.statementID) { scene in
+                    HStack {
+                        Text("Szene \(scene.position + 1) · \(scene.measuredDurationSeconds, specifier: "%.1f") s")
+                        Button("Abspielen") { workspace.playNarrationScene(position: scene.position) }
+                    }
+                }
+                if workspace.isPlayingNarration { Button("Wiedergabe stoppen") { workspace.stopNarrationPlayback() } }
             }
         }
     }

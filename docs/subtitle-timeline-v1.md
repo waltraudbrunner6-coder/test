@@ -1,0 +1,11 @@
+# SubtitleTimelineV1
+
+Pure lokale Ableitung aus `VideoSceneV1.narrationText` und gemessener `NarrationSceneAudioV1`. Keine neue Aussage, Zusammenfassung oder Provideranfrage.
+
+Der Algorithmus zerlegt ausschließlich an Unicode-Whitespace. Tokens behalten Zeichen, Schreibweise, Reihenfolge und Satzzeichen unverändert. Die Anzeige verbindet Tokens mit jeweils einem Leerzeichen; ursprüngliche Whitespaceformatierung wird normalisiert. Ein Chunk endet nach höchstens zehn vollständigen Wörtern oder vorher bei terminalem Punkt, Fragezeichen, Ausrufezeichen oder Semikolon. Für die Grenzerkennung werden nur umgebende Anführungs-/Schlusszeichen betrachtet; sie bleiben im ausgegebenen Token erhalten. Abkürzungen können deshalb frühe Cues bilden, werden aber nicht umgeschrieben. Kein Wort wird ergänzt, entfernt oder in der Mitte getrennt.
+
+Pro Szene werden Chunk-Wortzahlen als Gewichte verwendet. Cue-Ende = Start + gemesseneSzenendauer × Chunkwortzahl / Gesamtwortzahl. Der erste Cue beginnt exakt bei scene.start; der letzte erhält exakt scene.end als Float-Rest. Innerhalb und zwischen Szenen bestehen keine Lücken/Überlappungen. Cue-Indizes sind global ab 0, scenePosition und statementID bleiben erhalten. Leere Texte, falsche Szenenreferenzen, nicht endliche oder widersprüchliche Zeitgrenzen werden abgelehnt.
+
+Diese Zeiten sind **deterministisch aus der gemessenen Szenendauer abgeleitet**. Es sind keine ASR-/Provider-Word-Timestamps und kein phonemgenaues Alignment. Unterschiede zwischen gleichmäßigem Wortgewicht und realer Aussprache/Pausen bleiben sichtbar als Grenze der V1; keine falsche Timinggarantie. Zukünftige echte Alignmentdaten benötigen eine ausdrücklich neue versionierte Timingstrategie, können dieselben Statement-/Szenenbezüge verwenden und dürfen historische V1-Pakete nicht umschreiben.
+
+Beim Laden des Narration-Manifests werden sämtliche Cues erneut aus Handoff und Messwerten abgeleitet und exakt verglichen. Wortänderungen, fremde StatementIDs oder manipulierte Cuezeiten machen das Paket ungültig. Audiozeiten werden zusätzlich gegen vollständig decodierte WAV-Frames geprüft. Tests decken kurze/lange Texte, Whitespace, Satzzeichen/Anführungszeichen, deterministische Ausgabe, Worterhaltung, Float-Endpunkt und gemessene Szenenübergänge offline ab.

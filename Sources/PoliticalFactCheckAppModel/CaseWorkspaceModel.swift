@@ -6,6 +6,7 @@ import PoliticalFactCheckScripting
 import PoliticalFactCheckExport
 import PoliticalFactCheckResearch
 import PoliticalFactCheckVideoPlanning
+import PoliticalFactCheckAudio
 
 @MainActor
 public final class CaseWorkspaceModel: ObservableObject {
@@ -42,9 +43,18 @@ public final class CaseWorkspaceModel: ObservableObject {
     private static let reviewerIDKey = "politicalFactCheck.reviewerID"
     private let store: LocalCaseStore?
     private let defaults: UserDefaults
+    private let narrationStore: NarrationPackageStore
+    private let narrationPlayback = LocalNarrationPlayback()
+    private var narrationTask: Task<NarrationPackageV1, Error>?
+    @Published public private(set) var isGeneratingNarration = false
+    @Published public private(set) var narrationProgress: String?
+    @Published public private(set) var narrationErrorMessage: String?
+    @Published public private(set) var narrationPackage: NarrationPackageV1?
+    @Published public private(set) var isPlayingNarration = false
 
-    public init(store: LocalCaseStore, defaults: UserDefaults = .standard) {
+    public init(store: LocalCaseStore, defaults: UserDefaults = .standard, narrationStore: NarrationPackageStore? = nil) {
         self.store = store
+        self.narrationStore = narrationStore ?? .applicationSupport()
         self.defaults = defaults
         self.reviewerName = defaults.string(forKey: Self.reviewerNameKey) ?? ""
         reload()
@@ -52,6 +62,7 @@ public final class CaseWorkspaceModel: ObservableObject {
 
     public init(startupError: String, defaults: UserDefaults = .standard) {
         self.store = nil
+        self.narrationStore = .applicationSupport()
         self.defaults = defaults
         self.reviewerName = defaults.string(forKey: Self.reviewerNameKey) ?? ""
         self.errorMessage = startupError
@@ -786,6 +797,71 @@ public final class CaseWorkspaceModel: ObservableObject {
         return try? VideoScriptHandoffBuilder.build(scriptID: id, in: graph)
     }
 
+    public var canGenerateNarration: Bool { videoScriptHandoff != nil && !isGeneratingNarration }
+    public var narrationReadyForRendering: Bool {
+        guard let handoff = videoScriptHandoff, let loaded = try? narrationStore.load(handoff: handoff) else { return false }
+        return loaded.readyForRendering(handoff: handoff)
+    }
+    public var narrationModel: String { OpenAINarrationProvider.defaultModel }
+
+    public func reloadNarrationPackage() {
+        stopNarrationPlayback()
+        narrationPackage = nil; narrationErrorMessage = nil
+        guard let handoff = videoScriptHandoff else { return }
+        do { narrationPackage = try narrationStore.load(handoff: handoff) }
+        catch { narrationErrorMessage = narrationMessage(error) }
+    }
+
+    /// Explicit UI action; only fresh handoff narration text is passed to the neutral provider.
+    @discardableResult
+    public func generateNarration(provider: any NarrationProvider = OpenAINarrationProvider(),
+                                  regenerate: Bool = false, settings: NarrationSettings = .init()) async -> Bool {
+        guard !isGeneratingNarration else { narrationErrorMessage = NarrationError.generationInProgress.displayMessage; return false }
+        guard let store, let caseID = selectedCaseID, let handoff = videoScriptHandoff else {
+            narrationErrorMessage = NarrationError.inputUnavailable.displayMessage; return false
+        }
+        stopNarrationPlayback()
+        isGeneratingNarration = true; narrationErrorMessage = nil
+        defer { isGeneratingNarration = false; narrationTask = nil; narrationProgress = nil }
+        do {
+            let token = try store.scriptGenerationChangeToken(caseID: caseID)
+            let task = Task { @MainActor in
+                try await self.narrationStore.generate(handoff: handoff, provider: provider, settings: settings,
+                    regenerate: regenerate, progress: { current, total in
+                        self.narrationProgress = "Szene \(current) von \(total)"
+                    }, validateCurrent: {
+                        guard self.selectedCaseID == caseID, let graph = try store.loadCase(id: caseID),
+                              let fresh = try? VideoScriptHandoffBuilder.build(scriptID: handoff.scriptID, in: graph),
+                              fresh == handoff, try store.scriptGenerationChangeToken(caseID: caseID) == token else {
+                            throw NarrationError.staleInput
+                        }
+                    })
+            }
+            narrationTask = task
+            let package = try await withTaskCancellationHandler(operation: { try await task.value }, onCancel: { task.cancel() })
+            narrationPackage = package; narrationErrorMessage = nil
+            return true
+        } catch {
+            // An old valid package remains untouched on disk, including after a failed retry.
+            if selectedCaseID == caseID { reloadNarrationPackage() }
+            narrationErrorMessage = narrationMessage(error); return false
+        }
+    }
+    public func cancelNarration() { narrationTask?.cancel() }
+    public func playNarrationScene(position: Int) {
+        do {
+            guard let handoff = videoScriptHandoff, let package = try narrationStore.load(handoff: handoff) else { throw NarrationError.inputUnavailable }
+            let url = try narrationStore.audioURL(package: package, scenePosition: position, handoff: handoff)
+            narrationPlayback.onFinished = { [weak self] in self?.isPlayingNarration = false }
+            try narrationPlayback.play(url: url); isPlayingNarration = true; narrationErrorMessage = nil
+        } catch { stopNarrationPlayback(); narrationErrorMessage = narrationMessage(error) }
+    }
+    public func stopNarrationPlayback() { narrationPlayback.stop(); isPlayingNarration = false }
+    private func narrationMessage(_ error: Error) -> String {
+        if error is CancellationError { return NarrationError.cancelled.displayMessage }
+        return (error as? NarrationError)?.displayMessage ?? NarrationError.storageFailure.displayMessage
+    }
+
     /// Resolves the current source without asking the user to select an evaluation ID.
     /// Preparing the existing preview is local; Send remains a separate explicit action.
     @discardableResult
@@ -1016,6 +1092,7 @@ public final class CaseWorkspaceModel: ObservableObject {
     }
 
     private func loadSelectedCase() {
+        defer { reloadNarrationPackage() }
         guard let store, let id = selectedCaseID else {
             selectedContext = nil
             selectedReviewState = nil
