@@ -45,3 +45,9 @@ Lokale Aufrufe von swift --version, swift test und xcodebuild enden jeweils mit 
 ## API-Referenzen
 
 Request-/Schemaform anhand der offiziellen OpenAI-OpenAPI-Spezifikation geprüft: https://github.com/openai/openai-openapi/blob/master/openapi.yaml. Weitere Referenzen: https://platform.openai.com/docs/api-reference/responses/create und https://platform.openai.com/docs/guides/structured-outputs. Die Prüfung der API-Struktur ersetzt keinen Live-Kompatibilitätsnachweis für das konfigurierte Modell.
+
+## Phase 5.4 – aktuelle Bewertung und Rückkehrprüfung
+
+„KI-Skript erzeugen“ löst nach Research-Review ausschließlich die bestehende lokale Preview mit automatisch ermittelter aktueller approved Evaluation aus. Kein heimlicher Sendeschritt. Vorhandene draft/needsReview-Fassungen führen zur Reviewfortsetzung, zusätzliche KI-Versionen nur nach ausdrücklicher Anforderung. Der Adapter, Prompt, Modell gpt-6.1-sol, medium, store:false und Strict Structured Output bleiben unverändert; keine Websuche/neuen Quellen.
+
+Nach der asynchronen Antwort werden Input und vollständiger lokaler Change Token erneut geprüft, einschließlich Änderungen außerhalb des Snapshots und gewechselter Auswahl. Erst danach folgt die vorhandene atomare Speicherung. Derselbe konservative Schutz gilt für den injizierten Fake-Providerpfad. Fehler behalten den Case unverändert; zwischen Prüfung und Speicherung gibt es keinen weiteren await. Tokens, Revieweridentität, Schlüssel und Audits gelangen weiterhin nicht zusätzlich in die Übertragung oder den VideoHandoff. Neue verzögerte URLProtocol-/Fake-Tests sind offline; neuer CI-Nachweis steht aus.

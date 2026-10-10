@@ -94,6 +94,81 @@ extension LocalCaseStore {
         try changeScriptStatus(caseID: caseID, scriptID: scriptID, status: .approved, reviewer: reviewer, at: date)
     }
 
+    /// One explicit selection, one reviewer/date, one save. Already reviewed sentences
+    /// remain byte-for-byte unchanged; any invalid member rolls back the whole selection.
+    public func reviewScriptStatements(caseID: EntityID<Case>, scriptID: EntityID<ScriptDraft>,
+        statementIDs: Set<EntityID<ScriptStatement>>, reviewer: ReviewerIdentity, at date: Date) throws {
+        try transaction("reviewScriptStatements") { context in
+            var graph = try manualGraph(caseID: caseID, reviewer: reviewer, in: context)
+            let plan = try ScriptReviewPlan.build(caseID: caseID, in: graph)
+            guard let script = graph.find(scriptID), plan.scriptID == scriptID,
+                  script.status == .draft || script.status == .needsReview,
+                  !statementIDs.isEmpty, statementIDs.isSubset(of: Set(script.statementIDs)) else {
+                throw ScriptReviewError.invalidSelection
+            }
+            var dto = CaseGraphDTO(graph)
+            for id in script.statementIDs where statementIDs.contains(id) {
+                guard let statement = graph.find(id) else { throw ScriptReviewError.invalidSelection }
+                if statement.review != nil { continue }
+                let next = try domainChange { try DomainChanges.reviewScriptStatement(statement,
+                    review: HumanReview(reviewerID: reviewer.id, reviewedAt: date), in: graph) }
+                guard let index = dto.statements.firstIndex(where: { $0.id.value == id.rawValue }) else {
+                    throw ScriptReviewError.invalidSelection
+                }
+                dto.statements[index] = ScriptStatementDTO(next)
+                try scriptAudit(&dto, caseID: caseID, target: ObjectReference(kind: .statement, id: id),
+                    operation: "reviewScriptStatement", author: .human(reviewer.id), reviewer: reviewer, at: date)
+                graph = try domainChange { try dto.domain() }
+            }
+            try writeCase(graph, in: context)
+        }
+    }
+
+    /// Stages adjacent Core transitions in the same unsaved context, then saves exactly
+    /// once through transaction(). No direct draft -> approved replacement.
+    public func approveReviewedScript(caseID: EntityID<Case>, scriptID: EntityID<ScriptDraft>,
+        explicitConfirmation: Bool, reviewer: ReviewerIdentity, at date: Date) throws {
+        try approveReviewedScript(caseID: caseID, scriptID: scriptID, explicitConfirmation: explicitConfirmation,
+            reviewer: reviewer, at: date, beforeFinalWrite: {})
+    }
+
+    /// Internal fault seam for testing rollback after the unsaved transition checkpoint.
+    func approveReviewedScript(caseID: EntityID<Case>, scriptID: EntityID<ScriptDraft>,
+        explicitConfirmation: Bool, reviewer: ReviewerIdentity, at date: Date,
+        beforeFinalWrite: () throws -> Void) throws {
+        try transaction("approveReviewedScript") { context in
+            guard explicitConfirmation else { throw ScriptReviewError.confirmationRequired }
+            var graph = try manualGraph(caseID: caseID, reviewer: reviewer, in: context)
+            let plan = try ScriptReviewPlan.build(caseID: caseID, in: graph)
+            guard plan.scriptID == scriptID, plan.readyForApproval, var script = graph.find(scriptID) else {
+                throw ScriptReviewError.statementsNotReviewed
+            }
+            guard date >= script.createdAt,
+                  script.statementIDs.compactMap({ graph.find($0)?.review?.reviewedAt }).allSatisfy({ $0 <= date }) else {
+                throw PersistenceError.invalidDomain([.invalidReviewTime])
+            }
+            if script.status == .draft {
+                script = try domainChange { try DomainChanges.transition(script, to: .needsReview, in: graph) }
+                var dto = CaseGraphDTO(graph)
+                let index = dto.scripts.firstIndex { $0.id.value == scriptID.rawValue }!
+                dto.scripts[index] = ScriptDraftDTO(script)
+                try scriptAudit(&dto, caseID: caseID, target: ObjectReference(kind: .script, id: scriptID),
+                    operation: "submitScriptForReview", author: .human(reviewer.id), reviewer: reviewer, at: date)
+                graph = try domainChange { try dto.domain() }
+                try writeCase(graph, in: context) // unsaved checkpoint preserves replacement rules
+            }
+            let approved = try domainChange { try DomainChanges.transition(script, to: .approved,
+                approval: HumanReview(reviewerID: reviewer.id, reviewedAt: date), in: graph) }
+            var dto = CaseGraphDTO(graph)
+            let index = dto.scripts.firstIndex { $0.id.value == scriptID.rawValue }!
+            dto.scripts[index] = ScriptDraftDTO(approved)
+            try scriptAudit(&dto, caseID: caseID, target: ObjectReference(kind: .script, id: scriptID),
+                operation: "approveScript", author: .human(reviewer.id), reviewer: reviewer, at: date)
+            try beforeFinalWrite()
+            try writeCase(domainChange { try dto.domain() }, in: context)
+        }
+    }
+
     private func changeScriptStatus(caseID: EntityID<Case>, scriptID: EntityID<ScriptDraft>, status: ScriptStatus,
                                     reviewer: ReviewerIdentity, at date: Date) throws {
         try transaction("changeScriptStatus") { context in

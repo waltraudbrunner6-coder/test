@@ -129,3 +129,11 @@ LocalCaseStore.saveCaseResearch ergänzt Drafts und einen ResearchTask mit DeepR
 ## Phase 5.3 – Recherche prüfen
 
 Dossier-Fälle erhalten sechs lokale Reviewstufen: Original, Kriterien, Fundstellen, Entwicklungen, Evidenz, Bewertung. Inhalte sind vorbefüllt; Kontext ist korrigierbar. Aktive Prüfklicks verlangen Reviewer-Namen. Fortschritt/Blocker sind aus Domainzuständen und Auditbindungen abgeleitet. Nicht übernommene Gegenbelege benötigen Bestätigung. Finale Freigabe verlangt Checkbox je Kriterium plus Gesamtbestätigung. Manuelle Editoren, Dossier und Skriptbereich bleiben erhalten; kein automatischer Script-Aufruf. Details: [research-review-queue.md](research-review-queue.md).
+
+## Phase 5.4 – Skript prüfen und Videoübergabe
+
+Unmittelbar nach der Research-Review-Queue bietet die App bei eindeutig aktueller approved Evaluation „KI-Skript erzeugen“ an. Nur lokale Vorschau; „An OpenAI senden“ bleibt erforderlich. Bestehende Drafts führen zur Prüfung, approved Fassungen zur Videoanzeige; explizite neue KI-Versionen erzeugen ungeprüfte neue IDs. Keine manuelle UUID-Auswahl.
+
+Kleine private ScriptReviewQueueView, ScriptReviewStatementRow, ScriptReviewSourceView und VideoHandoffPreview halten den ViewBuilder begrenzt. Quellen, exakter Excerpt, anklickbare URL, Satztyp und Unsicherheit stehen zusammen. Nicht erfasste Metadaten werden ausdrücklich benannt. Ungeprüfte Sätze können bewusst ausgewählt werden; erst „Markierte Sätze als geprüft übernehmen“ schreibt HumanReviews. Finale Freigabe verlangt alle Satzreviews plus zusätzliche Bestätigung. Bestehende Einzelaktionen/Fassungen stehen weiterhin in einer DisclosureGroup.
+
+„Bereit für Video“ erscheint nur für den frisch validierten aktuellen Handoff. Vorschau: Szenenzahl, geplante Länge, Fakten-Szenen mit Quellenhinweis und optional Szenendetails; keine Renderaktion. Planzeiten sind keine Sprechmessung. Historische approved-Versionen werden bei einem neueren Draft nicht als aktuelle Videoeingabe angezeigt. Details/Prüfstand: [automatic-script-handoff.md](automatic-script-handoff.md).

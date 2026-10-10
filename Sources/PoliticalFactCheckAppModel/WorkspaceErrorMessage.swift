@@ -6,6 +6,20 @@ import PoliticalFactCheckPersistence
 
 public enum WorkspaceErrorMessage {
     public static func describe(_ error: Error) -> String {
+        if let error = error as? ScriptReviewError {
+            switch error {
+            case .currentEvaluationUnavailable: return "Keine aktuelle freigegebene Bewertung; zuerst die Bewertungsprüfung abschließen."
+            case .ambiguousEvaluation: return "Mehrere aktuelle Bewertungen; Skripterzeugung ist bis zur Klärung blockiert."
+            case .ambiguousScript: return "Mehrere Skripte derselben aktuellen Version; Prüfung ist blockiert."
+            case .scriptUnavailable: return "Das aktuelle Skript fehlt."
+            case .existingScriptRequiresReview: return "Vorhandenen Skriptentwurf zuerst prüfen."
+            case .newVersionConfirmationRequired: return "Eine neue KI-Skriptversion muss ausdrücklich angefordert werden."
+            case .invalidScript: return "Skript oder geprüfte Quellenreferenzen sind ungültig."
+            case .confirmationRequired: return "Bestätige ausdrücklich die Prüfung von Fakten, Quellen, Interpretationen und Unsicherheiten."
+            case .statementsNotReviewed: return "Alle Sätze müssen menschlich geprüft sein; die aktuelle Bewertung muss freigegeben bleiben."
+            case .invalidSelection: return "Die Auswahl enthält keinen gültigen Satz oder gehört nicht zum aktuellen prüfbaren Skript."
+            }
+        }
         if let error = error as? EditorialPackageError {
             switch error {
             case .evaluationNotApproved: return "Keine gültige menschlich freigegebene Bewertung vorhanden."

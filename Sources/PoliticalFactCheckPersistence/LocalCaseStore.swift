@@ -3,6 +3,7 @@ import SwiftData
 import PoliticalFactCheckExport
 import PoliticalFactCheckCore
 import PoliticalFactCheckResearch
+import PoliticalFactCheckScripting
 
 /// One local writer. Each operation owns a fresh context with autosave disabled.
 @MainActor
@@ -75,6 +76,7 @@ public final class LocalCaseStore {
             try context.save()
         } catch {
             context.rollback()
+            if let error = error as? ScriptReviewError { throw error }
             if let error = error as? ResearchReviewError { throw error }
             if let error = error as? CaseResearchError { throw error }
             if let error = error as? EditorialPackageError { throw error }

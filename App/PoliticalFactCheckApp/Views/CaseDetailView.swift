@@ -57,6 +57,7 @@ struct CaseDetailView: View {
                 if let plan = workspace.researchReviewPlan {
                     ResearchReviewQueueView(workspace: workspace, plan: plan).id(politicalCase.id)
                 } else if let blocker = workspace.researchReviewBlocker { Text(blocker).foregroundStyle(.orange) }
+                if workspace.scriptReviewPlan != nil { currentScriptActions }
                 ResearchDossierView(dossier: dossier)
             } else if politicalCase.workflowState == .candidate,
                       workspace.researchInbox.contains(where: { $0.id == politicalCase.id }) {
@@ -107,34 +108,49 @@ struct CaseDetailView: View {
             Text("KI-Entwürfe werden erst nach Übertragungsvorschau gesendet und bleiben ungeprüft.").font(.subheadline).foregroundStyle(.secondary)
             Text("Zielzeit ist ein Planwert; keine gemessene Sprechdauer.").font(.caption)
             Stepper("Zielzeit: \(Int(scriptTargetSeconds)) Sekunden", value: $scriptTargetSeconds, in: 30...60, step: 5)
-            ForEach(evaluations, id: \.id) { evaluation in
-                scriptGenerationActions(evaluation)
+            currentScriptActions
+            if let plan = workspace.scriptReviewPlan, plan.scriptID != nil {
+                ScriptReviewQueueView(workspace: workspace, plan: plan).id(plan.scriptID)
+            } else if let blocker = workspace.scriptReviewBlocker {
+                Text(blocker).foregroundStyle(.orange)
             }
+            if let handoff = workspace.videoScriptHandoff { VideoHandoffPreview(handoff: handoff) }
             if graph.scripts.isEmpty { Text("Noch kein Skriptentwurf.").foregroundStyle(.secondary) }
-            ForEach(graph.scripts.sorted { $0.createdAt < $1.createdAt }, id: \.id) { script in
-                scriptCard(script)
-                Divider()
+            DisclosureGroup("Skriptfassungen und bestehende Einzelaktionen") {
+                ForEach(graph.scripts.sorted { $0.createdAt < $1.createdAt }, id: \.id) { script in
+                    scriptCard(script)
+                    Divider()
+                }
             }
         }
     }
 
-    @ViewBuilder private func scriptGenerationActions(_ evaluation: CaseEvaluation) -> some View {
-        if evaluation.status == .approved {
+    @ViewBuilder private var currentScriptActions: some View {
+        if let plan = workspace.scriptReviewPlan {
             HStack {
-                Button("KI-Skriptentwurf erzeugen") {
-                    if workspace.prepareOpenAIPreview(evaluationID: evaluation.id, targetDurationSeconds: scriptTargetSeconds) {
-                        sheet = .openAITransmission
-                    }
-                }.disabled(workspace.isGeneratingScript)
-                Button("Manuellen Entwurf anlegen") { sheet = .manualScript(evaluation.id, nil) }
+                if plan.generationAvailable {
+                    Button("KI-Skript erzeugen") { prepareCurrentPreview(newVersion: false) }
+                        .buttonStyle(.borderedProminent).disabled(workspace.isGeneratingScript)
+                } else if plan.scriptStatus == .draft || plan.scriptStatus == .needsReview {
+                    Text("Skriptprüfung fortsetzen · \(plan.reviewedCount)/\(plan.totalCount) Sätze geprüft")
+                } else {
+                    if plan.readyForVideo { Text("Skript freigegeben").foregroundStyle(.green) }
+                    Button("Neue KI-Skriptversion erzeugen") { prepareCurrentPreview(newVersion: true) }
+                        .disabled(workspace.isGeneratingScript)
+                }
+                Button("Manuellen Entwurf anlegen") { sheet = .manualScript(plan.evaluationID, nil) }
             }
             #if DEBUG
             Button("Lokaler Test-Provider – keine echte KI") {
-                Task { await workspace.generateScript(evaluationID: evaluation.id, targetDurationSeconds: scriptTargetSeconds) }
-            }.disabled(workspace.isGeneratingScript)
+                Task { await workspace.generateScript(evaluationID: plan.evaluationID, targetDurationSeconds: scriptTargetSeconds) }
+            }.disabled(workspace.isGeneratingScript || !plan.generationAvailable)
             #endif
-        } else if evaluation.status == .reviewRequired {
-            Text("Bewertung muss erneut geprüft werden").foregroundStyle(.orange)
+        }
+    }
+
+    private func prepareCurrentPreview(newVersion: Bool) {
+        if workspace.prepareCurrentScriptPreview(targetDurationSeconds: scriptTargetSeconds, newVersion: newVersion) {
+            sheet = .openAITransmission
         }
     }
 
@@ -1202,5 +1218,111 @@ private struct ResearchDevelopmentReviewCard: View {
             }
             Text(state == .reviewed ? "menschlich geprüft" : state == .notUsed ? "nicht verwendet" : "Fundstellen und Handlungsfelder prüfen")
         }.onAppear { scope = development.scope ?? ""; eventDate = development.eventDate ?? "" }
+    }
+}
+
+@MainActor private struct ScriptReviewQueueView: View {
+    @ObservedObject var workspace: CaseWorkspaceModel
+    let plan: ScriptReviewPlan
+    @State private var selected: Set<EntityID<ScriptStatement>> = []
+    @State private var confirmed = false
+    private var editable: Bool { plan.scriptStatus == .draft || plan.scriptStatus == .needsReview }
+    private var originLabel: String {
+        guard let id = plan.scriptID, let script = workspace.selectedContext?.find(id) else { return "Skript" }
+        if case .ai = script.author { return "KI-Skript" }
+        return "Manuelles Skript"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Skript prüfen").font(.headline)
+            Text("\(originLabel): \(plan.scriptStatus?.scriptLabel ?? "Status fehlt") · \(plan.reviewedCount)/\(plan.totalCount) Sätze menschlich geprüft · Version \(plan.scriptVersion ?? 0)")
+            ForEach(plan.statementItems, id: \.statementID) { item in
+                ScriptReviewStatementRow(item: item, editable: editable, selected: selection(item.statementID))
+            }
+            ForEach(Array(plan.blockingIssues.enumerated()), id: \.offset) { entry in
+                Text(WorkspaceErrorMessage.describe(entry.element)).foregroundStyle(.orange)
+            }
+            if editable, let scriptID = plan.scriptID {
+                Button("Markierte Sätze als geprüft übernehmen") {
+                    if workspace.reviewScriptStatements(scriptID: scriptID, selected: selected) { selected.removeAll() }
+                }.disabled(selected.isEmpty || workspace.isGeneratingScript || !plan.blockingIssues.isEmpty)
+                if plan.readyForApproval {
+                    Text("Alle \(plan.totalCount) Sätze menschlich geprüft.")
+                    Toggle("Ich habe Fakten, Quellen, Interpretationen und Unsicherheiten geprüft.", isOn: $confirmed)
+                    Button("Skript freigeben") {
+                        workspace.approveReviewedScript(scriptID, explicitConfirmation: confirmed)
+                    }.buttonStyle(.borderedProminent).disabled(!confirmed || workspace.isGeneratingScript)
+                }
+            }
+        }.onChange(of: plan.readyForApproval) { _, _ in confirmed = false }
+    }
+
+    private func selection(_ id: EntityID<ScriptStatement>) -> Binding<Bool> {
+        Binding(get: { selected.contains(id) }, set: { value in
+            if value { selected.insert(id) } else { selected.remove(id) }
+        })
+    }
+}
+
+private struct ScriptReviewStatementRow: View {
+    let item: ScriptReviewItem
+    let editable: Bool
+    @Binding var selected: Bool
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("\(item.position + 1). \(item.kind.scriptLabel)").font(.headline)
+            Text(item.text).textSelection(.enabled)
+            if let uncertainty = item.uncertainty { Text("Unsicherheit: \(uncertainty)").foregroundStyle(.secondary) }
+            ForEach(item.sourceSummaries, id: \.excerptID) { source in
+                ScriptReviewSourceView(source: source)
+            }
+            if item.reviewState == .reviewed {
+                Label("Menschlich geprüft", systemImage: "checkmark.circle")
+            } else if editable {
+                Toggle("Satz geprüft – Auswahl vor Übernahme", isOn: $selected)
+            } else { Text("Nicht menschlich geprüft").foregroundStyle(.orange) }
+        }.padding(10).background(Color.secondary.opacity(0.06)).clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+private struct ScriptReviewSourceView: View {
+    let source: ScriptReviewSourceSummary
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(source.title ?? "Quellentitel nicht erfasst").font(.subheadline)
+            Text(source.publisher ?? "Herausgeber nicht erfasst").font(.caption)
+            if let url = source.url { Link(url.absoluteString, destination: url) }
+            else { Text("URL nicht erfasst").font(.caption) }
+            Text("Fundstelle: \(source.locator)").font(.caption)
+            Text(source.exactExcerptText).textSelection(.enabled)
+            ForEach(Array(source.relationships.enumerated()), id: \.offset) { entry in
+                Text("Evidenzbeziehung: \(entry.element.displayName)").font(.caption)
+            }
+        }.padding(.leading, 8)
+    }
+}
+
+private struct VideoHandoffPreview: View {
+    let handoff: VideoScriptHandoffV1
+    private var factCount: Int { handoff.scenes.filter { $0.kind == .fact && !$0.sourceOverlays.isEmpty }.count }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Bereit für Video", systemImage: "checkmark.circle").font(.headline)
+            Text("\(handoff.scenes.count) Szenen · geplante Länge: \(Int(handoff.targetDurationSeconds)) s · \(factCount) Fakten-Szenen mit Quellenhinweis")
+            Text("Video-Pipeline folgt in Phase 6. Dauern sind Planwerte, keine gemessene Sprechdauer.").font(.caption)
+            DisclosureGroup("Video-Vorschau") {
+                ForEach(handoff.scenes, id: \.statementID) { scene in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Szene \(scene.position + 1) · \(scene.kind.scriptLabel) · geplante Dauer: \(scene.estimatedDurationSeconds, specifier: "%.1f") s").font(.headline)
+                        Text(scene.narrationText)
+                        if let uncertainty = scene.uncertainty { Text("Unsicherheit: \(uncertainty)").font(.caption) }
+                        ForEach(scene.sourceOverlays, id: \.excerptID) { overlay in
+                            Text("\(overlay.sourceTitle ?? "Titel nicht erfasst") · \(overlay.locator)").font(.caption)
+                        }
+                    }.padding(.vertical, 6)
+                }
+            }
+        }
     }
 }

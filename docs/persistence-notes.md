@@ -146,3 +146,9 @@ LocalCaseStore.saveCaseResearch ergänzt Drafts und einen ResearchTask mit DeepR
 ## Phase 5.3 – atomare Review-Orchestrierung
 
 Keine neuen Entities/Schema-Version. ResearchReviewPlan wird neu abgeleitet, Adoption-Lineage liegt in menschlichen AuditEntry.before/after-Referenzen. Neue geprüfte SourceVersion/Excerpt-/Action-/Evidence-Instanzen bewahren KI-Ursprung und historische IDs. Zusammengesetzte bestehende Storeoperationen laufen auf einem isolierten In-Memory-Staging-Store; unsaved Checkpoints bewahren einzelne erlaubte Statusübergänge im realen Context. Die äußere Transaktion führt genau einen Save oder Rollback aus. Originale ResearchTasks bleiben unverändert. Details und Snapshot-Historiengrenze: [research-review-queue.md](research-review-queue.md).
+
+## Phase 5.4 – atomare Skriptprüfung und finale Freigabe
+
+reviewScriptStatements lädt frisch, prüft Auswahl/aktuelles Skript und orchestriert die bestehenden Core-Satzreviews mit gemeinsamem menschlichem Reviewer/Zeitpunkt in einer Transaktion. Bereits geprüfte Sätze behalten ihren Review unverändert. approveReviewedScript verlangt ausdrückliche Bestätigung, alle Reviews und aktuelle approved Evaluation; staged draft → needsReview → approved verwendet vorhandene Core-Transitions und einen unsaved Checkpoint. Genau ein abschließender Save; Fehler rollen Reviewer, Satzreviews, Status und Audits zurück. Eine interne Fehlereinschleusung testet den späten Rollback ohne öffentliche Debug-API.
+
+Schema 1.0.0, Payload 1, Entities, Delete Rules, Snapshot-/Revisionsemantik und Editorial Package Format 1 bleiben unverändert. ScriptReviewPlan/VideoHandoff werden nicht gespeichert. Neue KI-Fassungen verwenden unverändert max + 1/neue IDs/nil-Reviews. Vollständiger lokaler Änderungstoken wird nach Providerantwort erneut geprüft; ein lokaler Writer bleibt Voraussetzung. Neue Offline-Tests/Prüfstand: [automatic-script-handoff.md](automatic-script-handoff.md).

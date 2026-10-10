@@ -5,6 +5,7 @@ import PoliticalFactCheckPersistence
 import PoliticalFactCheckScripting
 import PoliticalFactCheckExport
 import PoliticalFactCheckResearch
+import PoliticalFactCheckVideoPlanning
 
 @MainActor
 public final class CaseWorkspaceModel: ObservableObject {
@@ -767,6 +768,61 @@ public final class CaseWorkspaceModel: ObservableObject {
         return try ScriptInputBuilder.build(evaluationID: evaluationID, targetDurationSeconds: targetDurationSeconds, in: graph)
     }
 
+    public var scriptReviewPlan: ScriptReviewPlan? {
+        guard let graph = selectedContext, let caseID = selectedCaseID else { return nil }
+        return try? ScriptReviewPlan.build(caseID: caseID, in: graph)
+    }
+
+    public var scriptReviewBlocker: String? {
+        guard let graph = selectedContext, let caseID = selectedCaseID else { return nil }
+        do { _ = try ScriptReviewPlan.build(caseID: caseID, in: graph); return nil }
+        catch { return WorkspaceErrorMessage.describe(error) }
+    }
+
+    public var videoScriptHandoff: VideoScriptHandoffV1? {
+        guard let store, let caseID = selectedCaseID, let graph = try? store.loadCase(id: caseID),
+              let plan = try? ScriptReviewPlan.build(caseID: caseID, in: graph),
+              plan.readyForVideo, let id = plan.scriptID else { return nil }
+        return try? VideoScriptHandoffBuilder.build(scriptID: id, in: graph)
+    }
+
+    /// Resolves the current source without asking the user to select an evaluation ID.
+    /// Preparing the existing preview is local; Send remains a separate explicit action.
+    @discardableResult
+    public func prepareCurrentScriptPreview(targetDurationSeconds: Double = 45, newVersion: Bool = false) -> Bool {
+        do {
+            guard let store, let caseID = selectedCaseID, let graph = try store.loadCase(id: caseID) else {
+                throw WorkspaceInputError.caseUnavailable
+            }
+            let plan = try ScriptReviewPlan.build(caseID: caseID, in: graph)
+            if plan.scriptStatus == .draft || plan.scriptStatus == .needsReview {
+                throw ScriptReviewError.existingScriptRequiresReview
+            }
+            if plan.scriptID != nil && !newVersion { throw ScriptReviewError.newVersionConfirmationRequired }
+            return prepareOpenAIPreview(evaluationID: plan.evaluationID, targetDurationSeconds: targetDurationSeconds)
+        } catch { present(error); return false }
+    }
+
+    @discardableResult
+    public func reviewScriptStatements(scriptID: EntityID<ScriptDraft>, selected: Set<EntityID<ScriptStatement>>) -> Bool {
+        do {
+            guard let store, let caseID = selectedCaseID else { throw WorkspaceInputError.caseUnavailable }
+            try store.reviewScriptStatements(caseID: caseID, scriptID: scriptID, statementIDs: selected,
+                reviewer: currentReviewer(), at: Date())
+            reload(selecting: caseID); return true
+        } catch { present(error); return false }
+    }
+
+    @discardableResult
+    public func approveReviewedScript(_ scriptID: EntityID<ScriptDraft>, explicitConfirmation: Bool) -> Bool {
+        do {
+            guard let store, let caseID = selectedCaseID else { throw WorkspaceInputError.caseUnavailable }
+            try store.approveReviewedScript(caseID: caseID, scriptID: scriptID, explicitConfirmation: explicitConfirmation,
+                reviewer: currentReviewer(), at: Date())
+            reload(selecting: caseID); return true
+        } catch { present(error); return false }
+    }
+
     /// Preparing a preview is strictly local: no provider, key lookup or network invocation.
     @discardableResult
     public func prepareOpenAIPreview(evaluationID: EntityID<CaseEvaluation>, targetDurationSeconds: Double = 45,
@@ -818,6 +874,9 @@ public final class CaseWorkspaceModel: ObservableObject {
             guard provider.configuration == preview.configuration else { throw OpenAIProviderError.previewChanged }
             let output = try await provider.generateScript(input: input)
             try Task.checkCancellation()
+            let refreshed = try scriptInput(evaluationID: input.evaluation.id, targetDurationSeconds: input.targetDurationSeconds)
+            guard selectedCaseID == caseID, refreshed == input,
+                  try store.scriptGenerationChangeToken(caseID: caseID) == token else { throw OpenAIProviderError.previewChanged }
             let script = try store.saveGeneratedScriptDraft(caseID: caseID, evaluationID: input.evaluation.id,
                 output: output, targetDurationSeconds: input.targetDurationSeconds,
                 providerIdentifier: provider.identifier, reviewer: reviewer, at: Date())
@@ -843,10 +902,14 @@ public final class CaseWorkspaceModel: ObservableObject {
             guard let store, let caseID = selectedCaseID else { throw WorkspaceInputError.caseUnavailable }
             let reviewer = try currentReviewer()
             let input = try scriptInput(evaluationID: evaluationID, targetDurationSeconds: targetDurationSeconds)
+            let token = try store.scriptGenerationChangeToken(caseID: caseID)
             let output: ScriptGenerationOutput
             do { output = try await provider.generateScript(input: input) }
             catch { throw ScriptGenerationError.providerFailure(String(describing: error)) }
             try Task.checkCancellation()
+            let refreshed = try scriptInput(evaluationID: evaluationID, targetDurationSeconds: targetDurationSeconds)
+            guard selectedCaseID == caseID, refreshed == input,
+                  try store.scriptGenerationChangeToken(caseID: caseID) == token else { throw OpenAIProviderError.previewChanged }
             let script = try store.saveGeneratedScriptDraft(caseID: caseID, evaluationID: evaluationID,
                 output: output, targetDurationSeconds: targetDurationSeconds, providerIdentifier: provider.identifier, reviewer: reviewer, at: Date())
             reload(selecting: caseID)

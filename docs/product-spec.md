@@ -171,3 +171,9 @@ Zunächst einen klar formulierten, zeitlich überprüfbaren Einzelfall mit zugä
 ### Phase 5.3 – kompakte Rechercheprüfung
 
 AI recherchiert. Mensch prüft die vorgeschlagenen Quellen und Schlussfolgerungen. Die App übernimmt geprüfte Inhalte ohne erneute manuelle Dateneingabe. Eine lokale, abgeleitete Review Queue orchestriert bestehende Core-Prüfungen; keine zweite Wahrheitslogik oder Persistenz-State-Machine. Neue geprüfte Revisionen werden explizit zu den erhaltenen KI-Drafts zurückverknüpft. Stichtag, nicht übernommene Gegenbelege und Kriterienbewertungen werden vor einer expliziten menschlichen Freigabe angezeigt. Details: [research-review-queue.md](research-review-queue.md).
+
+## Phase 5.4 – redaktioneller Übergang zum Video
+
+Aktuelle approved Evaluation → bestehende lokale OpenAI-Vorschau → explizites Senden → ungeprüfter AI ScriptDraft → kompakte menschliche Satzprüfung → approved Script → deterministischer VideoScriptHandoffV1. Keine automatische journalistische Freigabe. Die aktuelle Quelle wird ohne UUID-Auswahl konservativ aus Manifest und expliziten Evaluation-Ersatzketten ermittelt; Mehrdeutigkeit blockiert. Vorhandene Drafts werden weiter geprüft, neue KI-Versionen nur ausdrücklich angefordert. Historie und alle bisherigen Bewertungsregeln bleiben erhalten.
+
+ScriptReviewPlan und VideoHandoff sind abgeleitete, nicht persistierte Werte. Satzquellen stehen direkt beim Text; Sammelreview und finale explizite Freigabe verwenden atomar die vorhandenen Core-Transitions. Der VideoHandoff enthält ausschließlich freigegebene Skript-/Quelleninformationen, kein neues Urteil. Noch keine TTS-, Bild-, Untertitel- oder Renderpipeline und keine Änderung des Editorial Package Format 1. Details: [automatic-script-handoff.md](automatic-script-handoff.md), [video-script-handoff-v1.md](video-script-handoff-v1.md). Neue macOS-CI-Verifikation ausstehend.
