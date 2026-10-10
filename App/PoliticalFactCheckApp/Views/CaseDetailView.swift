@@ -1018,17 +1018,7 @@ private struct ResearchReviewQueueView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("2. Prüfkriterien auswählen und bestätigen").font(.headline)
             ForEach(plan.record.result.proposedCriteria, id: \.criterionKey) { criterion in
-                VStack(alignment: .leading) {
-                    Text(criterion.goal + " · " + label(plan.criteria.first { $0.key == criterion.criterionKey }?.state ?? .blocked))
-                    Text("Zielgruppe: " + (criterion.targetGroup ?? "unbekannt") + " · Ausgangslage: " + (criterion.baseline ?? "unbekannt")).font(.caption)
-                    Text("Frist: " + (criterion.deadline ?? "unbekannt") + " · Bedingungen: " + (criterion.conditions?.joined(separator: "; ") ?? "unbekannt")).font(.caption)
-                    Text((criterion.isCore ? "Kernkriterium · " : "Teilbestandteil · ") + criterion.materialityRule).font(.caption)
-                    Text(criterion.uncertainties.joined(separator: " · ")).foregroundStyle(.secondary)
-                    HStack {
-                        Button("Übernehmen") { workspace.performResearchReview(.criterion(criterion.criterionKey, use: true)) }
-                        Button("Nicht verwenden") { workspace.performResearchReview(.criterion(criterion.criterionKey, use: false)) }
-                    }.disabled(workspace.selectedCase?.workflowState != .documented || plan.criteria.first { $0.key == criterion.criterionKey }?.state == .notUsed)
-                }
+                criterionReviewRow(for: criterion.criterionKey)
             }
             TextField("Prüfrahmen / Kontext prüfen oder korrigieren", text: $contextText, axis: .vertical)
             Text("Dieser Schritt bestätigt auch die Sprecherzuordnung anhand der geprüften Originalfundstelle und die ausdrücklich gewählten Kriterien.").font(.caption)
@@ -1036,24 +1026,83 @@ private struct ResearchReviewQueueView: View {
                 .disabled(workspace.selectedCase?.workflowState != .documented)
         }
     }
+    private func criterionState(for key: String) -> ResearchReviewItemState {
+        plan.criteria.first(where: { $0.key == key })?.state ?? .blocked
+    }
+    @ViewBuilder
+    private func criterionReviewRow(for key: String) -> some View {
+        if let criterion = plan.record.result.proposedCriteria.first(where: { $0.criterionKey == key }) {
+            let state: ResearchReviewItemState = criterionState(for: key)
+            let selectionDisabled: Bool = workspace.selectedCase?.workflowState != .documented || state == .notUsed
+            let title: String = criterion.goal + " · " + label(state)
+            let target: String = "Zielgruppe: \(criterion.targetGroup ?? "unbekannt") · Ausgangslage: \(criterion.baseline ?? "unbekannt")"
+            let conditions: String = criterion.conditions?.joined(separator: "; ") ?? "unbekannt"
+            let deadline: String = "Frist: \(criterion.deadline ?? "unbekannt") · Bedingungen: \(conditions)"
+            let materiality: String = (criterion.isCore ? "Kernkriterium · " : "Teilbestandteil · ") + criterion.materialityRule
+            let uncertainties: String = criterion.uncertainties.joined(separator: " · ")
+            VStack(alignment: .leading) {
+                Text(title)
+                Text(target).font(.caption)
+                Text(deadline).font(.caption)
+                Text(materiality).font(.caption)
+                Text(uncertainties).foregroundStyle(.secondary)
+                HStack {
+                    Button("Übernehmen") { workspace.performResearchReview(.criterion(key, use: true)) }
+                    Button("Nicht verwenden") { workspace.performResearchReview(.criterion(key, use: false)) }
+                }.disabled(selectionDisabled)
+            }
+        }
+    }
     private var sources: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("3. Benötigte Fundstellen prüfen").font(.headline)
             Text("Unbenutzte Fundstellen können ungeprüft bleiben. Ablehnen bedeutet eine ausdrückliche fachliche Ablehnung.").font(.caption)
             ForEach(plan.record.result.excerpts, id: \.excerptKey) { excerpt in
-                VStack(alignment: .leading) {
-                    Text(excerpt.text).textSelection(.enabled)
-                    Text(excerpt.locator + " · " + excerpt.context + " · Ereignis: " + (excerpt.eventDate ?? "unbekannt")).font(.caption)
-                    Text("Verwendung: " + plan.record.result.evidenceProposals.filter { $0.excerptKeys.contains(excerpt.excerptKey) }.map { $0.evidenceKey }.joined(separator: ", ")).font(.caption)
-                    Text(excerpt.uncertainties.joined(separator: " · ")).foregroundStyle(.secondary)
-                    if let source = plan.record.result.sources.first(where: { $0.claim.sourceKey == excerpt.sourceKey }), let url = URL(string: source.searchSource.url) { Link(source.claim.title ?? source.searchSource.url, destination: url) }
-                    Text(label(plan.evidenceSources.first { $0.key == excerpt.excerptKey }?.state ?? .blocked))
-                    if let raw = plan.record.bindings?.excerpts[excerpt.excerptKey] {
-                        HStack {
-                            Button("Fundstelle geprüft") { workspace.performResearchReview(.excerpt(EntityID<SourceExcerpt>(raw), reject: false)) }
-                            Button("Fundstelle ablehnen") { workspace.performResearchReview(.excerpt(EntityID<SourceExcerpt>(raw), reject: true)) }
-                        }.disabled(plan.evidenceSources.first { $0.key == excerpt.excerptKey }?.state != .ready)
-                    }
+                sourceReviewRow(for: excerpt.excerptKey)
+            }
+        }
+    }
+    private func excerptState(for key: String) -> ResearchReviewItemState {
+        plan.evidenceSources.first(where: { $0.key == key })?.state ?? .blocked
+    }
+    private func evidenceUsage(for excerptKey: String) -> String {
+        let keys: [String] = plan.record.result.evidenceProposals
+            .filter { $0.excerptKeys.contains(excerptKey) }
+            .map { $0.evidenceKey }
+        return keys.joined(separator: ", ")
+    }
+    private func sourceLink(for sourceKey: String) -> (title: String, url: URL)? {
+        guard let source = plan.record.result.sources.first(where: { $0.claim.sourceKey == sourceKey }),
+              let url = URL(string: source.searchSource.url) else { return nil }
+        return (source.claim.title ?? source.searchSource.url, url)
+    }
+    private func draftExcerptID(for key: String) -> EntityID<SourceExcerpt>? {
+        guard let raw = plan.record.bindings?.excerpts[key] else { return nil }
+        return EntityID<SourceExcerpt>(raw)
+    }
+    @ViewBuilder
+    private func sourceReviewRow(for key: String) -> some View {
+        if let excerpt = plan.record.result.excerpts.first(where: { $0.excerptKey == key }) {
+            let state: ResearchReviewItemState = excerptState(for: key)
+            let reviewDisabled: Bool = state != .ready
+            let detail: String = "\(excerpt.locator) · \(excerpt.context) · Ereignis: \(excerpt.eventDate ?? "unbekannt")"
+            let usage: String = "Verwendung: " + evidenceUsage(for: key)
+            let uncertainties: String = excerpt.uncertainties.joined(separator: " · ")
+            let stateLabel: String = label(state)
+            let link = sourceLink(for: excerpt.sourceKey)
+            let id: EntityID<SourceExcerpt>? = draftExcerptID(for: key)
+            VStack(alignment: .leading) {
+                Text(excerpt.text).textSelection(.enabled)
+                Text(detail).font(.caption)
+                Text(usage).font(.caption)
+                Text(uncertainties).foregroundStyle(.secondary)
+                if let link { Link(link.title, destination: link.url) }
+                Text(stateLabel)
+                if let id {
+                    HStack {
+                        Button("Fundstelle geprüft") { workspace.performResearchReview(.excerpt(id, reject: false)) }
+                        Button("Fundstelle ablehnen") { workspace.performResearchReview(.excerpt(id, reject: true)) }
+                    }.disabled(reviewDisabled)
                 }
             }
         }
